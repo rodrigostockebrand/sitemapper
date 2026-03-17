@@ -134,6 +134,8 @@ async function extractLinksWithBrowser(url: string, baseHost: string): Promise<s
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
+        "--js-flags=--max-old-space-size=256",
+        "--single-process",
       ],
     });
     const page = await browser.newPage();

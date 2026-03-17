@@ -5,7 +5,7 @@ const CHROME_PATH = process.env.CHROME_PATH || "/usr/bin/chromium-browser";
 const SCREENSHOT_WIDTH = 1280;
 const SCREENSHOT_HEIGHT = 800;
 const NAV_TIMEOUT = 30000;
-const CONCURRENT_SCREENSHOTS = 3;
+const CONCURRENT_SCREENSHOTS = 2;
 
 export async function takeScreenshots(
   pages: PageNode[],
@@ -31,6 +31,9 @@ export async function takeScreenshots(
         "--disable-extensions",
         "--disable-background-timer-throttling",
         "--disable-backgrounding-occluded-windows",
+        "--js-flags=--max-old-space-size=256",
+        "--single-process",
+        "--disable-features=TranslateUI",
       ],
     });
 
