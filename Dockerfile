@@ -20,7 +20,6 @@ RUN apt-get update && apt-get install -y \
 
 # Set Chrome path for puppeteer-core
 ENV CHROME_PATH=/usr/bin/chromium
-ENV NODE_ENV=production
 
 WORKDIR /app
 
@@ -35,6 +34,7 @@ COPY . .
 RUN npm run build
 
 # Prune dev dependencies after build
+ENV NODE_ENV=production
 RUN npm prune --omit=dev
 
 EXPOSE 5000
