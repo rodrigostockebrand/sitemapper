@@ -49,6 +49,11 @@ export async function registerRoutes(
     }
   }
 
+  // Health check endpoint (lightweight, no DB queries)
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", uptime: process.uptime() });
+  });
+
   // Start a crawl job
   app.post("/api/crawl", async (req, res) => {
     try {
@@ -107,15 +112,21 @@ export async function registerRoutes(
             progress: 50,
           });
 
-          // Phase 2: Screenshots
-          const pagesWithScreenshots = await takeScreenshots(pages, (screenshotsProcessed) => {
-            const screenshottable = pages.filter(
-              (p) => p.fileType === "html" && p.statusCode >= 200 && p.statusCode < 400
-            ).length;
-            const progress = 50 + Math.round((screenshotsProcessed / Math.max(screenshottable, 1)) * 50);
-            storage.updateCrawlJob(jobId, { screenshotsProcessed, progress });
-            broadcastProgress(jobId, { screenshotsProcessed, progress, status: "screenshotting" });
-          });
+          // Phase 2: Screenshots (wrapped in try-catch so Chromium OOM doesn't kill the server)
+          let pagesWithScreenshots = pages;
+          try {
+            pagesWithScreenshots = await takeScreenshots(pages, (screenshotsProcessed) => {
+              const screenshottable = pages.filter(
+                (p) => p.fileType === "html" && p.statusCode >= 200 && p.statusCode < 400
+              ).length;
+              const progress = 50 + Math.round((screenshotsProcessed / Math.max(screenshottable, 1)) * 50);
+              storage.updateCrawlJob(jobId, { screenshotsProcessed, progress });
+              broadcastProgress(jobId, { screenshotsProcessed, progress, status: "screenshotting" });
+            });
+          } catch (screenshotErr: any) {
+            console.error("Screenshot phase failed (OOM or crash):", screenshotErr.message);
+            // Continue with whatever screenshots we got — don't fail the whole job
+          }
 
           storage.updateCrawlJob(jobId, {
             status: "complete",
