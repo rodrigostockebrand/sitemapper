@@ -4,8 +4,8 @@ import type { PageNode } from "@shared/schema";
 import { screenshotUrl } from "@/lib/api";
 import { FileText, FileImage, File, Globe } from "lucide-react";
 
-const NODE_W = 180;
-const NODE_H = 155;
+const NODE_W = 170;
+const NODE_H = 150;
 
 interface SitemapCanvasProps {
   treeNodes: TreeNode[];
