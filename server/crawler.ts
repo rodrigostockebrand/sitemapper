@@ -3,7 +3,7 @@ import puppeteer from "puppeteer-core";
 import { randomUUID } from "crypto";
 import type { PageNode, CrawlJob } from "@shared/schema";
 
-const USER_AGENT = "Mozilla/5.0 (compatible; SitemapTool/1.0)";
+const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const CHROME_PATH = process.env.CHROME_PATH || "/usr/bin/chromium-browser";
 const FETCH_TIMEOUT = 15000;
 const CONCURRENT_LIMIT = 5;
