@@ -43,7 +43,7 @@
   --chart-3: 30 80% 55%;
   --chart-4: 280 60% 55%;
   --chart-5: 350 65% 55%;
-  --font-sans: 'Inter', 'Helvetica Neue', sans-serif;
+  --font-sans: 'General Sans', 'Inter', 'Helvetica Neue', sans-serif;
   --font-mono: 'JetBrains Mono', 'Menlo', monospace;
   --radius: .5rem;
   --shadow-2xs: 0 1px 2px hsl(220 20% 10% / 0.04);
