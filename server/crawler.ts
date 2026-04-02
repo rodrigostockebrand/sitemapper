@@ -66,11 +66,80 @@ async function fetchPage(url: string): Promise<{
     if (contentType.includes("html") || contentType.includes("xhtml")) {
       body = await res.text();
     }
-    return { body, statusCode: res.status, contentType, ok: res.ok };
+    const result = { body, statusCode: res.status, contentType, ok: res.ok };
+
+    // Detect bot challenge pages: short body with challenge keywords, or non-OK status
+    const isChallenged = result.ok && result.body.length > 0 && result.body.length < 5000 &&
+      (/challenge|captcha|verify|blocked|dduser|access denied|please wait/i.test(result.body));
+
+    if (!result.ok || isChallenged) {
+      console.log(`[crawler] HTTP fetch failed or challenged for ${url} (status=${result.statusCode}, challenged=${isChallenged}), trying browser fallback...`);
+      return await fetchPageWithBrowser(url);
+    }
+
+    return result;
   } catch (e: any) {
-    return { body: "", statusCode: 0, contentType: "error", ok: false };
+    console.log(`[crawler] HTTP fetch error for ${url}: ${e.message}, trying browser fallback...`);
+    return await fetchPageWithBrowser(url);
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/**
+ * Fetch a page using a real browser (Puppeteer).
+ * Used as fallback when HTTP fetch is blocked by bot protection.
+ */
+async function fetchPageWithBrowser(url: string): Promise<{
+  body: string;
+  statusCode: number;
+  contentType: string;
+  ok: boolean;
+}> {
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--js-flags=--max-old-space-size=256",
+        "--single-process",
+      ],
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent(USER_AGENT);
+    await page.setViewport({ width: 1280, height: 800 });
+
+    let responseStatus = 200;
+    page.on("response", (res) => {
+      if (res.url() === url || res.url().startsWith(url.replace(/\/$/, ""))) {
+        responseStatus = res.status();
+      }
+    });
+
+    try {
+      await page.goto(url, { waitUntil: "networkidle0", timeout: 25000 });
+    } catch {
+      // networkidle0 timeout is acceptable — page may still be usable
+    }
+
+    // Wait for JS to finish rendering
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const body = await page.content();
+    await page.close();
+
+    const ok = responseStatus >= 200 && responseStatus < 400;
+    return { body, statusCode: responseStatus, contentType: "text/html", ok: body.length > 500 ? true : ok };
+  } catch (err: any) {
+    console.error("Browser fetch fallback failed:", err.message);
+    return { body: "", statusCode: 0, contentType: "error", ok: false };
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
 }
 
