@@ -37,18 +37,19 @@ function ScreenshotBackground() {
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {/* Tilted mosaic of real website screenshots */}
       <div
-        className="absolute grid gap-2"
+        className="absolute grid gap-3"
         style={{
           inset: "-60%",
           gridTemplateColumns: "repeat(5, 1fr)",
           gridAutoRows: "auto",
-          transform: "rotate(-8deg) scale(1.1)",
+          transform: "rotate(-6deg) scale(1.15)",
           transformOrigin: "center center",
-          filter: "blur(2px) brightness(0.65) saturate(0.9)",
+          filter: "blur(1.5px) saturate(0.8)",
+          opacity: 0.45,
         }}
       >
         {GRID_TILES.map((src, i) => (
-          <div key={i} className="overflow-hidden rounded-lg shadow-xl" style={{ aspectRatio: "16/10" }}>
+          <div key={i} className="overflow-hidden rounded-lg shadow-md border border-black/5" style={{ aspectRatio: "16/10" }}>
             <img
               src={src}
               alt=""
@@ -58,14 +59,9 @@ function ScreenshotBackground() {
           </div>
         ))}
       </div>
-      {/* Dark vignette + gradient overlays */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#080810]/65 via-[#080810]/40 to-[#080810]/80" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/55 via-transparent to-[#080810]/55" />
-      {/* Subtle blue glow behind the form */}
-      <div
-        className="absolute top-[28%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full"
-        style={{ background: "radial-gradient(ellipse, rgba(59,130,246,0.1) 0%, transparent 70%)" }}
-      />
+      {/* Light gradient overlays for readability */}
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.35) 40%, rgba(255,255,255,0.65) 100%)" }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(255,255,255,0.5) 0%, transparent 20%, transparent 80%, rgba(255,255,255,0.5) 100%)" }} />
     </div>
   );
 }
@@ -80,13 +76,13 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="group relative flex items-start gap-3 p-3.5 rounded-xl hover:bg-white/[0.04] transition-colors duration-200">
+    <div className="group relative flex items-start gap-3 p-3.5 rounded-xl hover:bg-black/[0.04] transition-colors duration-200">
       <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/15 transition-colors">
-        <Icon className="w-[18px] h-[18px] text-blue-400" />
+        <Icon className="w-[18px] h-[18px] text-blue-500" />
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-white/90 mb-0.5">{title}</h3>
-        <p className="text-xs text-white/50 leading-relaxed">{description}</p>
+        <h3 className="text-sm font-semibold text-gray-800 mb-0.5">{title}</h3>
+        <p className="text-xs text-gray-500 leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -119,15 +115,10 @@ export default function Home() {
   const [jobData, setJobData] = useState<CrawlJob | null>(null);
   const [isComplete, setIsComplete] = useState(false);
 
-  // Force dark mode on the landing page
+  // Remove dark mode for light homepage
   useEffect(() => {
-    if (!currentJobId && !isComplete) {
-      document.documentElement.classList.add("dark");
-    }
-    return () => {
-      // Keep dark mode for result views too — remove this if you want light results
-    };
-  }, [currentJobId, isComplete]);
+    document.documentElement.classList.remove("dark");
+  }, []);
 
   const handleCrawlStarted = (jobId: string) => {
     setCurrentJobId(jobId);
@@ -150,33 +141,19 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen"
-      style={{
-        fontFamily: "'General Sans', 'Inter', sans-serif",
-        background: showLanding ? "#0a0a12" : undefined,
-        color: showLanding ? "#e2e8f0" : undefined,
-      }}
+      className="min-h-screen bg-background"
+      style={{ fontFamily: "'General Sans', 'Inter', sans-serif" }}
     >
       {/* Header */}
-      <header
-        className="sticky top-0 z-50 border-b backdrop-blur-md"
-        style={
-          showLanding
-            ? { background: "rgba(10,10,18,0.7)", borderColor: "rgba(255,255,255,0.08)" }
-            : undefined
-        }
-      >
+      <header className="sticky top-0 z-50 border-b border-border/60 bg-white/80 backdrop-blur-md">
         <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             onClick={handleReset}
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
             data-testid="button-logo-home"
           >
-            <SitemapLogo className="w-7 h-7" style={{ color: showLanding ? "#60a5fa" : "hsl(var(--primary))" }} />
-            <span
-              className="font-semibold text-sm tracking-tight"
-              style={{ color: showLanding ? "#f1f5f9" : undefined }}
-            >
+            <SitemapLogo className="w-7 h-7 text-primary" />
+            <span className="font-semibold text-sm tracking-tight text-foreground">
               The Visual Sitemapper
             </span>
           </button>
@@ -195,42 +172,42 @@ export default function Home() {
 
       {/* Landing hero — dark with screenshot tile background */}
       {showLanding && (
-        <div className="relative min-h-[calc(100vh-56px)]">
+        <div className="relative min-h-[calc(100vh-56px)]" style={{ background: "#f8f9fc" }}>
           <ScreenshotBackground />
           <div className="relative max-w-screen-xl mx-auto px-4 pt-16 pb-10">
             {/* Hero text */}
             <div className="max-w-2xl mx-auto text-center mb-10">
               <div
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6"
-                style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.2)" }}
+                style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.18)" }}
               >
-                <Zap className="w-3.5 h-3.5 text-blue-400" />
-                <span className="text-xs font-medium text-blue-300">
+                <Zap className="w-3.5 h-3.5 text-blue-500" />
+                <span className="text-xs font-medium text-blue-600">
                   Crawl up to 200 pages per site
                 </span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-white">
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-gray-900">
                 See your website,{" "}
-                <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
                   visually mapped
                 </span>
               </h1>
-              <p className="text-base text-white/55 leading-relaxed max-w-lg mx-auto">
+              <p className="text-base text-gray-500 leading-relaxed max-w-lg mx-auto">
                 Enter any domain to crawl its pages, capture screenshots, and
                 generate an interactive visual sitemap with hierarchy and page
                 details.
               </p>
             </div>
 
-            {/* Crawl form — with dark glass card */}
+            {/* Crawl form — clean white card */}
             <div className="max-w-lg mx-auto">
               <div
                 className="rounded-2xl p-6 border"
                 style={{
-                  background: "rgba(15,15,25,0.75)",
-                  backdropFilter: "blur(20px)",
-                  borderColor: "rgba(255,255,255,0.08)",
-                  boxShadow: "0 0 60px rgba(59,130,246,0.06), 0 4px 24px rgba(0,0,0,0.4)",
+                  background: "rgba(255,255,255,0.9)",
+                  backdropFilter: "blur(16px)",
+                  borderColor: "rgba(0,0,0,0.07)",
+                  boxShadow: "0 4px 32px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)",
                 }}
               >
                 <CrawlForm onCrawlStarted={handleCrawlStarted} />
