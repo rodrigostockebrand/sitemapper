@@ -13,98 +13,58 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-/* ── fake screenshot tile data ──────────────────────────────── */
-const TILES = [
-  { color: "#1a1a2e", bar: "#3b82f6", blocks: 3 },
-  { color: "#0f172a", bar: "#10b981", blocks: 4 },
-  { color: "#1e1b4b", bar: "#8b5cf6", blocks: 2 },
-  { color: "#172554", bar: "#3b82f6", blocks: 5 },
-  { color: "#1c1917", bar: "#f59e0b", blocks: 3 },
-  { color: "#0c0a09", bar: "#ef4444", blocks: 4 },
-  { color: "#18181b", bar: "#06b6d4", blocks: 2 },
-  { color: "#1a1a2e", bar: "#ec4899", blocks: 3 },
-  { color: "#0f172a", bar: "#14b8a6", blocks: 5 },
-  { color: "#172554", bar: "#f97316", blocks: 4 },
-  { color: "#1e1b4b", bar: "#a855f7", blocks: 2 },
-  { color: "#0c0a09", bar: "#22d3ee", blocks: 3 },
-  { color: "#18181b", bar: "#3b82f6", blocks: 4 },
-  { color: "#1c1917", bar: "#10b981", blocks: 5 },
-  { color: "#1a1a2e", bar: "#f43f5e", blocks: 3 },
-  { color: "#0f172a", bar: "#8b5cf6", blocks: 2 },
-  { color: "#172554", bar: "#eab308", blocks: 4 },
-  { color: "#1e1b4b", bar: "#06b6d4", blocks: 3 },
-  { color: "#0c0a09", bar: "#3b82f6", blocks: 5 },
-  { color: "#18181b", bar: "#10b981", blocks: 2 },
-  { color: "#1a1a2e", bar: "#ef4444", blocks: 4 },
-  { color: "#172554", bar: "#a855f7", blocks: 3 },
-  { color: "#0f172a", bar: "#f59e0b", blocks: 5 },
-  { color: "#1c1917", bar: "#ec4899", blocks: 2 },
+/* ── real website screenshot tiles ─────────────────────────── */
+const TILE_IMAGES = [
+  "/bg-tiles/stripe.jpg",
+  "/bg-tiles/linear.jpg",
+  "/bg-tiles/vercel.jpg",
+  "/bg-tiles/notion.jpg",
+  "/bg-tiles/figma.jpg",
+  "/bg-tiles/github.jpg",
+  "/bg-tiles/apple.jpg",
+  "/bg-tiles/shopify.jpg",
+  "/bg-tiles/webflow.jpg",
+  "/bg-tiles/framer.jpg",
+  "/bg-tiles/intercom.jpg",
+  "/bg-tiles/mailchimp.jpg",
 ];
 
-function ScreenshotTile({ tile, style }: { tile: typeof TILES[0]; style?: React.CSSProperties }) {
-  return (
-    <div
-      className="rounded-md overflow-hidden shadow-lg"
-      style={{
-        background: tile.color,
-        width: "100%",
-        aspectRatio: "16/10",
-        ...style,
-      }}
-    >
-      {/* Browser bar */}
-      <div className="flex items-center gap-1 px-2 py-1.5" style={{ background: "rgba(255,255,255,0.05)" }}>
-        <div className="w-1.5 h-1.5 rounded-full bg-red-500/60" />
-        <div className="w-1.5 h-1.5 rounded-full bg-yellow-500/60" />
-        <div className="w-1.5 h-1.5 rounded-full bg-green-500/60" />
-        <div className="ml-2 h-2 rounded-sm flex-1 max-w-[60%]" style={{ background: "rgba(255,255,255,0.07)" }} />
-      </div>
-      {/* Nav bar */}
-      <div className="h-2 mx-2 mt-1.5 rounded-sm" style={{ background: tile.bar, opacity: 0.7 }} />
-      {/* Content blocks */}
-      <div className="px-2 mt-2 space-y-1.5">
-        {Array.from({ length: tile.blocks }).map((_, i) => (
-          <div
-            key={i}
-            className="rounded-sm"
-            style={{
-              height: i === 0 ? "18%" : "8%",
-              width: i === 0 ? "100%" : `${55 + Math.random() * 40}%`,
-              background: i === 0 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.04)",
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
+// Repeat tiles to fill the grid
+const GRID_TILES = [...TILE_IMAGES, ...TILE_IMAGES, ...TILE_IMAGES].slice(0, 30);
 
 function ScreenshotBackground() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Tilted grid of screenshot tiles */}
+      {/* Tilted mosaic of real website screenshots */}
       <div
-        className="absolute inset-[-50%] grid gap-3"
+        className="absolute grid gap-2"
         style={{
-          gridTemplateColumns: "repeat(6, 200px)",
+          inset: "-60%",
+          gridTemplateColumns: "repeat(5, 1fr)",
           gridAutoRows: "auto",
-          transform: "rotate(-12deg) scale(1.3)",
+          transform: "rotate(-8deg) scale(1.1)",
           transformOrigin: "center center",
-          filter: "blur(2px)",
-          opacity: 0.25,
+          filter: "blur(3px) brightness(0.55) saturate(0.85)",
         }}
       >
-        {TILES.concat(TILES).map((tile, i) => (
-          <ScreenshotTile key={i} tile={tile} />
+        {GRID_TILES.map((src, i) => (
+          <div key={i} className="overflow-hidden rounded-lg shadow-xl" style={{ aspectRatio: "16/10" }}>
+            <img
+              src={src}
+              alt=""
+              className="w-full h-full object-cover object-top"
+              draggable={false}
+            />
+          </div>
         ))}
       </div>
-      {/* Dark gradient overlays for readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a12]/70 via-[#0a0a12]/50 to-[#0a0a12]/90" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a12]/60 via-transparent to-[#0a0a12]/60" />
-      {/* Radial spotlight behind the form */}
+      {/* Dark vignette + gradient overlays */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#080810]/75 via-[#080810]/55 to-[#080810]/85" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/65 via-transparent to-[#080810]/65" />
+      {/* Subtle blue glow behind the form */}
       <div
-        className="absolute top-[30%] left-1/2 -translate-x-1/2 w-[700px] h-[500px] rounded-full"
-        style={{ background: "radial-gradient(ellipse, rgba(59,130,246,0.08) 0%, transparent 70%)" }}
+        className="absolute top-[28%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full"
+        style={{ background: "radial-gradient(ellipse, rgba(59,130,246,0.1) 0%, transparent 70%)" }}
       />
     </div>
   );
