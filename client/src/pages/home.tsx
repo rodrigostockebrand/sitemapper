@@ -44,7 +44,7 @@ function ScreenshotBackground() {
           gridAutoRows: "auto",
           transform: "rotate(-8deg) scale(1.1)",
           transformOrigin: "center center",
-          filter: "blur(3px) brightness(0.55) saturate(0.85)",
+          filter: "blur(2px) brightness(0.65) saturate(0.9)",
         }}
       >
         {GRID_TILES.map((src, i) => (
@@ -59,8 +59,8 @@ function ScreenshotBackground() {
         ))}
       </div>
       {/* Dark vignette + gradient overlays */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#080810]/75 via-[#080810]/55 to-[#080810]/85" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/65 via-transparent to-[#080810]/65" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#080810]/65 via-[#080810]/40 to-[#080810]/80" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#080810]/55 via-transparent to-[#080810]/55" />
       {/* Subtle blue glow behind the form */}
       <div
         className="absolute top-[28%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full"
