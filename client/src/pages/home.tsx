@@ -15,18 +15,18 @@ import {
 
 /* ── real website screenshot tiles ─────────────────────────── */
 const TILE_IMAGES = [
-  "/bg-tiles/stripe.jpg",
-  "/bg-tiles/linear.jpg",
-  "/bg-tiles/vercel.jpg",
-  "/bg-tiles/notion.jpg",
-  "/bg-tiles/figma.jpg",
-  "/bg-tiles/github.jpg",
-  "/bg-tiles/apple.jpg",
-  "/bg-tiles/shopify.jpg",
-  "/bg-tiles/webflow.jpg",
-  "/bg-tiles/framer.jpg",
-  "/bg-tiles/intercom.jpg",
-  "/bg-tiles/mailchimp.jpg",
+  "./bg-tiles/stripe.jpg",
+  "./bg-tiles/linear.jpg",
+  "./bg-tiles/vercel.jpg",
+  "./bg-tiles/notion.jpg",
+  "./bg-tiles/figma.jpg",
+  "./bg-tiles/github.jpg",
+  "./bg-tiles/apple.jpg",
+  "./bg-tiles/shopify.jpg",
+  "./bg-tiles/webflow.jpg",
+  "./bg-tiles/framer.jpg",
+  "./bg-tiles/intercom.jpg",
+  "./bg-tiles/mailchimp.jpg",
 ];
 
 // Repeat tiles to fill the grid
