@@ -44,8 +44,8 @@ function ScreenshotBackground() {
           gridAutoRows: "auto",
           transform: "rotate(-6deg) scale(1.15)",
           transformOrigin: "center center",
-          filter: "blur(1.5px) saturate(0.8)",
-          opacity: 0.45,
+          filter: "blur(0.8px) saturate(0.9)",
+          opacity: 0.75,
         }}
       >
         {GRID_TILES.map((src, i) => (
@@ -59,9 +59,10 @@ function ScreenshotBackground() {
           </div>
         ))}
       </div>
-      {/* Light gradient overlays for readability */}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.35) 40%, rgba(255,255,255,0.65) 100%)" }} />
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to right, rgba(255,255,255,0.5) 0%, transparent 20%, transparent 80%, rgba(255,255,255,0.5) 100%)" }} />
+      {/* Radial spotlight in the hero center so text stays readable */}
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 65% 52% at 50% 38%, rgba(248,249,252,0.82) 0%, rgba(248,249,252,0.0) 100%)" }} />
+      {/* Edge fades top + bottom */}
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(248,249,252,0.5) 0%, transparent 18%, transparent 72%, rgba(248,249,252,0.65) 100%)" }} />
     </div>
   );
 }
@@ -215,7 +216,10 @@ export default function Home() {
             </div>
 
             {/* Feature cards */}
-            <div className="max-w-2xl mx-auto mt-16 grid grid-cols-1 sm:grid-cols-2 gap-1">
+            <div
+              className="max-w-2xl mx-auto mt-16 grid grid-cols-1 sm:grid-cols-2 gap-1 rounded-2xl p-2"
+              style={{ background: "rgba(255,255,255,0.65)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+            >
               <FeatureCard
                 icon={Network}
                 title="Automatic crawling"
