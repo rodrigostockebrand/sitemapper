@@ -60,11 +60,11 @@ function ScreenshotBackground() {
         ))}
       </div>
       {/* Subtle dark tint so the tiles have depth */}
-      <div className="absolute inset-0" style={{ background: "rgba(15,20,35,0.18)" }} />
-      {/* Radial spotlight in the hero center so text stays readable */}
-      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 65% 52% at 50% 38%, rgba(248,249,252,0.70) 0%, rgba(248,249,252,0.0) 100%)" }} />
+      <div className="absolute inset-0" style={{ background: "rgba(15,20,35,0.22)" }} />
+      {/* Strong radial spotlight — makes hero text area clearly readable */}
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 58% at 50% 38%, rgba(248,249,252,0.90) 0%, rgba(248,249,252,0.50) 55%, rgba(248,249,252,0.0) 100%)" }} />
       {/* Edge fades top + bottom */}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(248,249,252,0.40) 0%, transparent 18%, transparent 72%, rgba(248,249,252,0.50) 100%)" }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(248,249,252,0.45) 0%, transparent 18%, transparent 72%, rgba(248,249,252,0.55) 100%)" }} />
     </div>
   );
 }
