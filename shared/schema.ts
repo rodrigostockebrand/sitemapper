@@ -1,9 +1,57 @@
 import { z } from "zod";
 
-// Crawl job schema
+// ── Auth schemas ──────────────────────────────────────────
+export const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().min(1, "Name is required"),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export type RegisterRequest = z.infer<typeof registerSchema>;
+export type LoginRequest = z.infer<typeof loginSchema>;
+
+// User
+export type SubscriptionTier = "free" | "pro";
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  emailVerified: boolean;
+  tier: SubscriptionTier;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  createdAt: string;
+}
+
+/** Safe user object returned to the frontend (no password hash) */
+export type SafeUser = Omit<User, "passwordHash">;
+
+export interface VerificationToken {
+  id: string;
+  userId: string;
+  token: string;
+  type: "email_verify" | "password_reset";
+  expiresAt: string;
+  createdAt: string;
+}
+
+// ── Tier limits ───────────────────────────────────────────
+export const TIER_LIMITS = {
+  free: { maxPages: 100, maxDepth: 5, monthlyCredits: 5 },
+  pro: { maxPages: 1000, maxDepth: 10, monthlyCredits: Infinity },
+} as const;
+
+// ── Crawl job schemas ─────────────────────────────────────
 export const crawlRequestSchema = z.object({
   url: z.string().url(),
-  maxPages: z.number().min(1).max(200).default(50),
+  maxPages: z.number().min(1).max(1000).default(50),
   maxDepth: z.number().min(1).max(10).default(5),
 });
 
@@ -34,6 +82,7 @@ export interface PageNode {
 // Crawl job
 export interface CrawlJob {
   id: string;
+  userId: string | null;
   domain: string;
   status: "queued" | "crawling" | "screenshotting" | "complete" | "error";
   progress: number;

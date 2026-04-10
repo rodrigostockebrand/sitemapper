@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getAuthToken } from "./auth";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
@@ -7,9 +8,7 @@ async function throwIfResNotOk(res: Response) {
     let message = res.statusText;
     try {
       const text = await res.text();
-      // If the response is HTML (error page), show a friendly message instead
       if (text && !text.trimStart().startsWith("<")) {
-        // Try to parse as JSON for structured error
         try {
           const json = JSON.parse(text);
           message = json.error || json.message || text;
@@ -19,11 +18,18 @@ async function throwIfResNotOk(res: Response) {
       } else {
         message = `Server error (${res.status}). Please try again.`;
       }
-    } catch {
-      // Ignore read errors
-    }
+    } catch {}
     throw new Error(message);
   }
+}
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 export async function apiRequest(
@@ -33,7 +39,7 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(`${API_BASE}${url}`, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: authHeaders(data ? { "Content-Type": "application/json" } : {}),
     body: data ? JSON.stringify(data) : undefined,
   });
 
@@ -47,7 +53,9 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(`${API_BASE}${queryKey.join("/")}`);
+    const res = await fetch(`${API_BASE}${queryKey.join("/")}`, {
+      headers: authHeaders(),
+    });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;

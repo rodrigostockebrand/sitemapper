@@ -6,15 +6,19 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Search, Settings2 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 interface CrawlFormProps {
   onCrawlStarted: (jobId: string) => void;
 }
 
 export function CrawlForm({ onCrawlStarted }: CrawlFormProps) {
+  const { limits, user } = useAuth();
+  const tierMaxPages = limits?.maxPages ?? 100;
+  const tierMaxDepth = limits?.maxDepth ?? 5;
   const [url, setUrl] = useState("");
-  const [maxPages, setMaxPages] = useState(50);
-  const [maxDepth, setMaxDepth] = useState(4);
+  const [maxPages, setMaxPages] = useState(Math.min(50, tierMaxPages));
+  const [maxDepth, setMaxDepth] = useState(Math.min(4, tierMaxDepth));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +96,7 @@ export function CrawlForm({ onCrawlStarted }: CrawlFormProps) {
                 value={[maxPages]}
                 onValueChange={([v]) => setMaxPages(v)}
                 min={5}
-                max={200}
+                max={tierMaxPages}
                 step={5}
               />
             </div>
@@ -106,7 +110,7 @@ export function CrawlForm({ onCrawlStarted }: CrawlFormProps) {
                 value={[maxDepth]}
                 onValueChange={([v]) => setMaxDepth(v)}
                 min={1}
-                max={10}
+                max={tierMaxDepth}
                 step={1}
               />
             </div>

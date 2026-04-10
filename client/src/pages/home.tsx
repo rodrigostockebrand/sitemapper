@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { CrawlForm } from "@/components/CrawlForm";
 import { CrawlProgress } from "@/components/CrawlProgress";
 import { SitemapView } from "@/components/SitemapView";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
+import { useAuth } from "@/lib/auth";
 import type { CrawlJob } from "@shared/schema";
 import {
   Camera,
@@ -114,6 +116,7 @@ function SitemapLogo({ className = "" }: { className?: string }) {
 }
 
 export default function Home() {
+  const { user, limits } = useAuth();
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<CrawlJob | null>(null);
   const [isComplete, setIsComplete] = useState(false);
@@ -122,6 +125,15 @@ export default function Home() {
   useEffect(() => {
     document.documentElement.classList.remove("dark");
   }, []);
+
+  // Handle ?job=ID from dashboard links
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    const jobParam = params.get("job");
+    if (jobParam && !currentJobId) {
+      setCurrentJobId(jobParam);
+    }
+  }, [currentJobId]);
 
   const handleCrawlStarted = (jobId: string) => {
     setCurrentJobId(jobId);
@@ -160,16 +172,38 @@ export default function Home() {
               The Visual Sitemapper
             </span>
           </button>
-          {isComplete && (
-            <button
-              onClick={handleReset}
-              data-testid="button-new-crawl"
-              className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-            >
-              New Crawl
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {isComplete && (
+              <button
+                onClick={handleReset}
+                data-testid="button-new-crawl"
+                className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                New Crawl
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {user ? (
+              <Link href="/dashboard">
+                <span className="text-sm text-gray-600 hover:text-gray-900 font-medium cursor-pointer" data-testid="link-dashboard">
+                  {user.name}
+                </span>
+              </Link>
+            ) : (
+              <>
+                <Link href="/login">
+                  <span className="text-sm text-gray-600 hover:text-gray-900 font-medium cursor-pointer" data-testid="link-login">
+                    Sign In
+                  </span>
+                </Link>
+                <Link href="/register">
+                  <span className="text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 px-3 py-1.5 rounded-full cursor-pointer" data-testid="link-register">
+                    Sign Up
+                  </span>
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -186,7 +220,7 @@ export default function Home() {
               >
                 <Zap className="w-3.5 h-3.5 text-blue-500" />
                 <span className="text-xs font-medium text-blue-600">
-                  Crawl up to 200 pages per site
+                  Crawl up to {limits?.maxPages ?? 100} pages per site
                 </span>
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-gray-900">
