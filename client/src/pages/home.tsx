@@ -232,14 +232,25 @@ export default function Home() {
           <div className="relative max-w-screen-xl mx-auto px-4 pt-16 pb-10">
             {/* Hero text */}
             <div className="max-w-2xl mx-auto text-center mb-10">
-              <div
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6"
-                style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.30)" }}
-              >
-                <Zap className="w-3.5 h-3.5 text-blue-500" />
-                <span className="text-xs font-medium text-blue-300">
-                  Crawl up to {limits?.maxPages ?? 100} pages per site
-                </span>
+              <div className="inline-flex items-center gap-2 mb-6">
+                <div
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
+                  style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.30)" }}
+                >
+                  <Zap className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="text-xs font-medium text-blue-300">
+                    Crawl up to {limits?.maxPages ?? 100} pages per site
+                  </span>
+                </div>
+                <Link href="/pricing">
+                  <span
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-amber-300 cursor-pointer hover:text-amber-200 transition-colors"
+                    style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.30)" }}
+                  >
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    Pro: 1,000 pages &amp; unlimited sitemaps
+                  </span>
+                </Link>
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-white">
                 See your website,{" "}
