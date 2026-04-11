@@ -121,7 +121,7 @@ export default function PricingPage() {
           />
           <PlanCard
             name="Pro"
-            price="$50"
+            price="$49"
             highlighted
             current={user?.tier === "pro"}
             features={[

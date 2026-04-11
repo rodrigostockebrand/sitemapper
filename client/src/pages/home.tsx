@@ -13,6 +13,10 @@ import {
   FolderTree,
   Zap,
   ArrowRight,
+  Crown,
+  Check,
+  X,
+  Infinity,
 } from "lucide-react";
 
 /* ── real website screenshot tiles ─────────────────────────── */
@@ -90,6 +94,19 @@ function FeatureCard({
         <p className="text-xs text-gray-400 leading-relaxed">{description}</p>
       </div>
     </div>
+  );
+}
+
+function ComparisonRow({ text, included, pro }: { text: string; included?: boolean; pro?: boolean }) {
+  return (
+    <li className="flex items-center gap-2.5 text-sm">
+      {included ? (
+        <Check className={`w-4 h-4 flex-shrink-0 ${pro ? "text-blue-400" : "text-emerald-400"}`} />
+      ) : (
+        <X className="w-4 h-4 flex-shrink-0 text-gray-600" />
+      )}
+      <span className={included ? "text-gray-300" : "text-gray-600 line-through"}>{text}</span>
+    </li>
   );
 }
 
@@ -196,9 +213,10 @@ export default function Home() {
                     Sign In
                   </span>
                 </Link>
-                <Link href="/register">
-                  <span className="text-xs font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 px-3 py-1.5 rounded-full cursor-pointer" data-testid="link-register">
-                    Sign Up
+                <Link href="/pricing">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-3 py-1.5 rounded-full cursor-pointer" data-testid="link-go-pro">
+                    <Crown className="w-3 h-3" />
+                    Go Pro
                   </span>
                 </Link>
               </>
@@ -276,6 +294,68 @@ export default function Home() {
                 title="Broken link detection"
                 description="Pages returning 4xx or 5xx errors are flagged with a red border so you spot issues fast."
               />
+            </div>
+
+            {/* Pro vs Free comparison section */}
+            <div className="max-w-3xl mx-auto mt-20 mb-8">
+              <div className="text-center mb-10">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4" style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.30)" }}>
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs font-medium text-amber-300">Unlock the full power</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Free vs. Pro</h2>
+                <p className="text-gray-400 text-sm max-w-md mx-auto">The free plan is great for quick audits. Go Pro to map entire websites with no limits.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Free tier card */}
+                <div className="rounded-2xl p-6" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <h3 className="text-lg font-bold text-white mb-1">Free</h3>
+                  <p className="text-2xl font-bold text-white mb-5">$0 <span className="text-sm font-normal text-gray-500">forever</span></p>
+                  <ul className="space-y-3">
+                    <ComparisonRow text="Up to 100 pages per sitemap" included />
+                    <ComparisonRow text="5 sitemaps per month" included />
+                    <ComparisonRow text="Visual sitemap with screenshots" included />
+                    <ComparisonRow text="Broken link detection" included />
+                    <ComparisonRow text="Subfolder filtering" included />
+                    <ComparisonRow text="Unlimited sitemaps" />
+                    <ComparisonRow text="Up to 1,000 pages per sitemap" />
+                    <ComparisonRow text="Priority crawl speed" />
+                  </ul>
+                  <Link href="/register">
+                    <button className="w-full mt-6 py-2.5 rounded-lg text-sm font-medium text-white border border-white/15 hover:bg-white/10 transition-colors cursor-pointer" data-testid="button-free-signup">
+                      Get Started Free
+                    </button>
+                  </Link>
+                </div>
+
+                {/* Pro tier card */}
+                <div className="rounded-2xl p-6 relative overflow-hidden" style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(6,182,212,0.10) 100%)", border: "1px solid rgba(59,130,246,0.25)" }}>
+                  <div className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-1 rounded-full">Most Popular</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    <h3 className="text-lg font-bold text-white">Pro</h3>
+                  </div>
+                  <p className="text-2xl font-bold text-white mb-5">$49 <span className="text-sm font-normal text-gray-400">/month</span></p>
+                  <ul className="space-y-3">
+                    <ComparisonRow text="Up to 1,000 pages per sitemap" included pro />
+                    <ComparisonRow text="Unlimited sitemaps" included pro />
+                    <ComparisonRow text="Visual sitemap with screenshots" included pro />
+                    <ComparisonRow text="Broken link detection" included pro />
+                    <ComparisonRow text="Subfolder filtering" included pro />
+                    <ComparisonRow text="Priority crawl speed" included pro />
+                    <ComparisonRow text="Export & sharing (coming soon)" included pro />
+                  </ul>
+                  <Link href="/pricing">
+                    <button className="w-full mt-6 py-2.5 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-colors cursor-pointer" data-testid="button-go-pro">
+                      Upgrade to Pro
+                    </button>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Bottom nudge */}
+              <p className="text-center text-xs text-gray-500 mt-6">Cancel anytime. No contracts. Payments via Stripe.</p>
             </div>
           </div>
         </div>
