@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, Search, Settings2 } from "lucide-react";
+import { Loader2, Search, Settings2, Crown } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 interface CrawlFormProps {
@@ -16,9 +16,10 @@ export function CrawlForm({ onCrawlStarted }: CrawlFormProps) {
   const { limits, user } = useAuth();
   const tierMaxPages = limits?.maxPages ?? 100;
   const tierMaxDepth = limits?.maxDepth ?? 5;
+  const isPro = user?.tier === "pro";
   const [url, setUrl] = useState("");
-  const [maxPages, setMaxPages] = useState(Math.min(50, tierMaxPages));
-  const [maxDepth, setMaxDepth] = useState(Math.min(4, tierMaxDepth));
+  const [maxPages, setMaxPages] = useState(tierMaxPages);
+  const [maxDepth, setMaxDepth] = useState(tierMaxDepth);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,13 @@ export function CrawlForm({ onCrawlStarted }: CrawlFormProps) {
 
   return (
     <Card className="max-w-lg mx-auto p-6 border border-border/60">
+      {isPro && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60">
+          <Crown className="w-4 h-4 text-amber-500" />
+          <span className="text-xs font-semibold text-amber-700">Pro Mode</span>
+          <span className="text-xs text-amber-600/80 ml-auto">1,000 pages &middot; Unlimited sitemaps</span>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="url" className="text-sm font-medium">
