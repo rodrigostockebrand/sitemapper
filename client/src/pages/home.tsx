@@ -61,12 +61,12 @@ function ScreenshotBackground() {
           </div>
         ))}
       </div>
-      {/* Subtle dark tint so the tiles have depth */}
-      <div className="absolute inset-0" style={{ background: "rgba(15,20,35,0.22)" }} />
-      {/* Strong radial spotlight — makes hero text area clearly readable */}
-      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 58% at 50% 38%, rgba(248,249,252,0.90) 0%, rgba(248,249,252,0.50) 55%, rgba(248,249,252,0.0) 100%)" }} />
+      {/* Dark overlay — keeps screenshots visible underneath */}
+      <div className="absolute inset-0" style={{ background: "rgba(8,12,24,0.72)" }} />
+      {/* Radial vignette — slightly lighter in center for text focus */}
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 70% 60% at 50% 38%, rgba(8,12,24,0.15) 0%, rgba(8,12,24,0.45) 100%)" }} />
       {/* Edge fades top + bottom */}
-      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(248,249,252,0.45) 0%, transparent 18%, transparent 72%, rgba(248,249,252,0.55) 100%)" }} />
+      <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(8,12,24,0.40) 0%, transparent 18%, transparent 75%, rgba(8,12,24,0.50) 100%)" }} />
     </div>
   );
 }
@@ -81,13 +81,13 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="group relative flex items-start gap-3 p-3.5 rounded-xl hover:bg-black/[0.04] transition-colors duration-200">
-      <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/15 transition-colors">
-        <Icon className="w-[18px] h-[18px] text-blue-500" />
+    <div className="group relative flex items-start gap-3 p-3.5 rounded-xl hover:bg-white/[0.06] transition-colors duration-200">
+      <div className="w-9 h-9 rounded-lg bg-blue-400/15 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-400/25 transition-colors">
+        <Icon className="w-[18px] h-[18px] text-blue-400" />
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-gray-800 mb-0.5">{title}</h3>
-        <p className="text-xs text-gray-500 leading-relaxed">{description}</p>
+        <h3 className="text-sm font-semibold text-white mb-0.5">{title}</h3>
+        <p className="text-xs text-gray-400 leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -156,19 +156,19 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen bg-background"
-      style={{ fontFamily: "'General Sans', 'Inter', sans-serif" }}
+      className="min-h-screen"
+      style={{ fontFamily: "'General Sans', 'Inter', sans-serif", background: showLanding ? "#0a0e1a" : undefined }}
     >
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-white/80 backdrop-blur-md">
+      <header className={`sticky top-0 z-50 border-b backdrop-blur-md ${showLanding ? "border-white/10 bg-[#0a0e1a]/80" : "border-border/60 bg-white/80"}`}>
         <div className="max-w-screen-xl mx-auto px-4 h-14 flex items-center justify-between">
           <button
             onClick={handleReset}
             className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
             data-testid="button-logo-home"
           >
-            <SitemapLogo className="w-7 h-7 text-primary" />
-            <span className="font-semibold text-sm tracking-tight text-foreground">
+            <SitemapLogo className={`w-7 h-7 ${showLanding ? "text-blue-400" : "text-primary"}`} />
+            <span className={`font-semibold text-sm tracking-tight ${showLanding ? "text-white" : "text-foreground"}`}>
               The Visual Sitemapper
             </span>
           </button>
@@ -177,7 +177,7 @@ export default function Home() {
               <button
                 onClick={handleReset}
                 data-testid="button-new-crawl"
-                className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+                className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${showLanding ? "text-blue-400 hover:text-blue-300" : "text-primary hover:text-primary/80"}`}
               >
                 New Crawl
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -185,14 +185,14 @@ export default function Home() {
             )}
             {user ? (
               <Link href="/dashboard">
-                <span className="text-sm text-gray-600 hover:text-gray-900 font-medium cursor-pointer" data-testid="link-dashboard">
+                <span className={`text-sm font-medium cursor-pointer ${showLanding ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`} data-testid="link-dashboard">
                   {user.name}
                 </span>
               </Link>
             ) : (
               <>
                 <Link href="/login">
-                  <span className="text-sm text-gray-600 hover:text-gray-900 font-medium cursor-pointer" data-testid="link-login">
+                  <span className={`text-sm font-medium cursor-pointer ${showLanding ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`} data-testid="link-login">
                     Sign In
                   </span>
                 </Link>
@@ -209,27 +209,27 @@ export default function Home() {
 
       {/* Landing hero — dark with screenshot tile background */}
       {showLanding && (
-        <div className="relative min-h-[calc(100vh-56px)]" style={{ background: "#f8f9fc" }}>
+        <div className="relative min-h-[calc(100vh-56px)]" style={{ background: "#0a0e1a" }}>
           <ScreenshotBackground />
           <div className="relative max-w-screen-xl mx-auto px-4 pt-16 pb-10">
             {/* Hero text */}
             <div className="max-w-2xl mx-auto text-center mb-10">
               <div
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6"
-                style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.18)" }}
+                style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.30)" }}
               >
                 <Zap className="w-3.5 h-3.5 text-blue-500" />
-                <span className="text-xs font-medium text-blue-600">
+                <span className="text-xs font-medium text-blue-300">
                   Crawl up to {limits?.maxPages ?? 100} pages per site
                 </span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-gray-900">
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-white">
                 See your website,{" "}
                 <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
                   visually mapped
                 </span>
               </h1>
-              <p className="text-base text-gray-500 leading-relaxed max-w-lg mx-auto">
+              <p className="text-base text-gray-300 leading-relaxed max-w-lg mx-auto">
                 Enter any domain to crawl its pages, capture screenshots, and
                 generate an interactive visual sitemap with hierarchy and page
                 details.
@@ -254,7 +254,7 @@ export default function Home() {
             {/* Feature cards */}
             <div
               className="max-w-2xl mx-auto mt-16 grid grid-cols-1 sm:grid-cols-2 gap-1 rounded-2xl p-2"
-              style={{ background: "rgba(255,255,255,0.65)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+              style={{ background: "rgba(255,255,255,0.06)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", border: "1px solid rgba(255,255,255,0.08)" }}
             >
               <FeatureCard
                 icon={Network}
