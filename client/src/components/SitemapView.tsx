@@ -6,6 +6,7 @@ import { SitemapStats } from "@/components/SitemapStats";
 import { screenshotUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
 import {
   LayoutGrid,
   List,
@@ -13,6 +14,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 interface SitemapViewProps {
@@ -49,9 +51,7 @@ function buildTree(pages: PageNode[]): TreeNode[] {
 // Layout constants
 const NODE_W = 170;
 const NODE_H = 150;
-const H_GAP = 30;
-const V_GAP = 50;
-const MAX_COLS = 6; // Max children per row before wrapping
+const MAX_COLS = 8; // Max children per row before wrapping
 
 /**
  * Tree layout that respects actual subtree widths to prevent overlaps.
@@ -60,7 +60,10 @@ const MAX_COLS = 6; // Max children per row before wrapping
  * Children are arranged in rows (max MAX_COLS per row), where each column
  * width is the max subtree width of any child in that column across all rows.
  */
-function layoutTree(roots: TreeNode[]): { nodes: TreeNode[]; width: number; height: number } {
+function layoutTree(roots: TreeNode[], spacing: number = 0.5): { nodes: TreeNode[]; width: number; height: number } {
+  // spacing: 0 = very tight, 1 = very spread out
+  const H_GAP = Math.round(8 + spacing * 40); // 8..48
+  const V_GAP = Math.round(15 + spacing * 55); // 15..70
   const allNodes: TreeNode[] = [];
   let maxX = 0;
   let maxY = 0;
@@ -192,12 +195,15 @@ export function SitemapView({ job }: SitemapViewProps) {
   const [selectedNode, setSelectedNode] = useState<PageNode | null>(null);
   const [zoom, setZoom] = useState(0.65);
   const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
+  const [centerOffset, setCenterOffset] = useState<{ x: number; y: number } | null>(null);
+
+  const [spacing, setSpacing] = useState(0.25);
 
   const { treeNodes, layoutWidth, layoutHeight, roots } = useMemo(() => {
     const roots = buildTree(job.pages);
-    const { nodes, width, height } = layoutTree(roots);
+    const { nodes, width, height } = layoutTree(roots, spacing);
     return { treeNodes: nodes, layoutWidth: width, layoutHeight: height, roots };
-  }, [job.pages]);
+  }, [job.pages, spacing]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((z) => Math.min(z + 0.15, 2));
@@ -212,7 +218,14 @@ export function SitemapView({ job }: SitemapViewProps) {
     const containerHeight = window.innerHeight - 140;
     const scaleX = containerWidth / (layoutWidth + 60);
     const scaleY = containerHeight / (layoutHeight + 60);
-    setZoom(Math.min(scaleX, scaleY, 1));
+    const newZoom = Math.min(scaleX, scaleY, 1);
+    setZoom(newZoom);
+    // Center the map in the viewport
+    const scaledW = (layoutWidth + 60) * newZoom;
+    const scaledH = (layoutHeight + 60) * newZoom;
+    const cx = Math.max(0, (containerWidth - scaledW) / 2);
+    const cy = Math.max(0, (containerHeight - scaledH) / 2);
+    setCenterOffset({ x: cx, y: cy });
   }, [layoutWidth, layoutHeight, selectedNode]);
 
   const handleExportSVG = useCallback(() => {
@@ -287,6 +300,20 @@ export function SitemapView({ job }: SitemapViewProps) {
             <Maximize2 className="w-4 h-4" />
           </Button>
           <div className="w-px h-5 bg-border mx-1" />
+          <div className="flex items-center gap-1.5 mr-1" title="Map density">
+            <Minimize2 className="w-3 h-3 text-muted-foreground" />
+            <Slider
+              value={[spacing]}
+              onValueChange={([v]) => setSpacing(v)}
+              min={0}
+              max={1}
+              step={0.05}
+              className="w-20"
+              data-testid="slider-spacing"
+            />
+            <Maximize2 className="w-3 h-3 text-muted-foreground" />
+          </div>
+          <div className="w-px h-5 bg-border mx-1" />
           <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={handleExportSVG} data-testid="button-export">
             <Download className="w-3.5 h-3.5" />
             Export SVG
@@ -307,6 +334,8 @@ export function SitemapView({ job }: SitemapViewProps) {
             jobId={job.id}
             onSelectNode={setSelectedNode}
             selectedNodeId={selectedNode?.id || null}
+            centerOffset={centerOffset}
+            onCenterOffsetConsumed={() => setCenterOffset(null)}
           />
         ) : (
           <PageListView

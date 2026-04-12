@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import type { TreeNode } from "@/components/SitemapView";
 import type { PageNode } from "@shared/schema";
 import { screenshotUrl } from "@/lib/api";
@@ -17,6 +17,8 @@ interface SitemapCanvasProps {
   jobId: string;
   onSelectNode: (node: PageNode) => void;
   selectedNodeId: string | null;
+  centerOffset?: { x: number; y: number } | null;
+  onCenterOffsetConsumed?: () => void;
 }
 
 export function SitemapCanvas({
@@ -29,11 +31,21 @@ export function SitemapCanvas({
   jobId,
   onSelectNode,
   selectedNodeId,
+  centerOffset,
+  onCenterOffsetConsumed,
 }: SitemapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [panOffset, setPanOffset] = useState({ x: 30, y: 30 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // Apply center offset from fit-view
+  useEffect(() => {
+    if (centerOffset) {
+      setPanOffset({ x: centerOffset.x, y: centerOffset.y });
+      onCenterOffsetConsumed?.();
+    }
+  }, [centerOffset, onCenterOffsetConsumed]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
