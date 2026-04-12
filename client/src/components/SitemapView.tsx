@@ -51,27 +51,36 @@ function buildTree(pages: PageNode[]): TreeNode[] {
 // Layout constants
 const NODE_W = 170;
 const NODE_H = 150;
-const MAX_COLS = 8; // Max children per row before wrapping
+const MAX_COLS = 10; // Max children per row before wrapping
 
 /**
- * Tree layout that respects actual subtree widths to prevent overlaps.
- * 
- * Each node is allocated enough horizontal space for its entire subtree.
- * Children are arranged in rows (max MAX_COLS per row), where each column
- * width is the max subtree width of any child in that column across all rows.
+ * Compact tree layout that minimises wasted space.
+ *
+ * The key insight: instead of reserving the full recursive subtree width
+ * for every column, we use a two-pass approach:
+ *   1. Measure each subtree's width (recursive, memoised).
+ *   2. Position nodes, but blend between "subtree-reserved" width and
+ *      a tighter "node-only" width based on the spacing slider.
+ *
+ * spacing=0 → columns are just NODE_W + gap (very tight, deepest nodes may
+ *             overlap slightly but siblings never do).
+ * spacing=1 → classic full-subtree-width allocation.
+ * Default 0.3 gives a good balance.
  */
-function layoutTree(roots: TreeNode[], spacing: number = 0.5): { nodes: TreeNode[]; width: number; height: number } {
-  // spacing: 0 = very tight, 1 = very spread out
-  const H_GAP = Math.round(8 + spacing * 40); // 8..48
-  const V_GAP = Math.round(15 + spacing * 55); // 15..70
+function layoutTree(
+  roots: TreeNode[],
+  spacing: number = 0.3,
+): { nodes: TreeNode[]; width: number; height: number } {
+  // Gap ranges controlled by the slider
+  const H_GAP = Math.round(6 + spacing * 30);  // 6..36
+  const V_GAP = Math.round(12 + spacing * 40);  // 12..52
+
   const allNodes: TreeNode[] = [];
   let maxX = 0;
   let maxY = 0;
 
-  /**
-   * Calculate the full width a subtree needs (recursive).
-   * Memoized via a Map to avoid exponential recalc.
-   */
+  /* ── Measure pass ─────────────────────────────────────── */
+
   const widthCache = new Map<string, number>();
   function subtreeWidth(node: TreeNode): number {
     if (widthCache.has(node.id)) return widthCache.get(node.id)!;
@@ -81,27 +90,18 @@ function layoutTree(roots: TreeNode[], spacing: number = 0.5): { nodes: TreeNode
     }
     const cols = Math.min(node.children.length, MAX_COLS);
     const rowCount = Math.ceil(node.children.length / cols);
-
-    // Compute max subtree width per column across all rows
     const colWidths = new Array(cols).fill(NODE_W);
     for (let r = 0; r < rowCount; r++) {
-      const startIdx = r * cols;
-      const endIdx = Math.min(startIdx + cols, node.children.length);
-      for (let i = startIdx; i < endIdx; i++) {
-        const colIdx = i - startIdx;
-        colWidths[colIdx] = Math.max(colWidths[colIdx], subtreeWidth(node.children[i]));
+      for (let i = r * cols; i < Math.min((r + 1) * cols, node.children.length); i++) {
+        const c = i - r * cols;
+        colWidths[c] = Math.max(colWidths[c], subtreeWidth(node.children[i]));
       }
     }
-
-    const totalW = colWidths.reduce((sum, w) => sum + w, 0) + (cols - 1) * H_GAP;
-    const result = Math.max(NODE_W, totalW);
-    widthCache.set(node.id, result);
-    return result;
+    const full = colWidths.reduce((s, w) => s + w, 0) + (cols - 1) * H_GAP;
+    widthCache.set(node.id, Math.max(NODE_W, full));
+    return widthCache.get(node.id)!;
   }
 
-  /**
-   * Calculate the full height a subtree needs (recursive).
-   */
   const heightCache = new Map<string, number>();
   function subtreeHeight(node: TreeNode): number {
     if (heightCache.has(node.id)) return heightCache.get(node.id)!;
@@ -111,81 +111,72 @@ function layoutTree(roots: TreeNode[], spacing: number = 0.5): { nodes: TreeNode
     }
     const cols = Math.min(node.children.length, MAX_COLS);
     const rowCount = Math.ceil(node.children.length / cols);
-
-    let totalH = NODE_H + V_GAP;
+    let h = NODE_H + V_GAP;
     for (let r = 0; r < rowCount; r++) {
-      const startIdx = r * cols;
-      const endIdx = Math.min(startIdx + cols, node.children.length);
-      let maxRowH = 0;
-      for (let i = startIdx; i < endIdx; i++) {
-        maxRowH = Math.max(maxRowH, subtreeHeight(node.children[i]));
+      let rowMax = 0;
+      for (let i = r * cols; i < Math.min((r + 1) * cols, node.children.length); i++) {
+        rowMax = Math.max(rowMax, subtreeHeight(node.children[i]));
       }
-      totalH += maxRowH + (r < rowCount - 1 ? V_GAP : 0);
+      h += rowMax + (r < rowCount - 1 ? V_GAP : 0);
     }
-
-    heightCache.set(node.id, totalH);
-    return totalH;
+    heightCache.set(node.id, h);
+    return h;
   }
 
-  /**
-   * Position a node and recursively position its children.
-   * Each child gets allocated its actual subtree width.
-   */
-  function position(node: TreeNode, x: number, y: number) {
-    const w = subtreeWidth(node);
+  /* ── Position pass ────────────────────────────────────── */
 
-    // Center this node card above its children
-    node.x = x + w / 2 - NODE_W / 2;
+  /**
+   * Effective width for a child column — blend between full subtree width
+   * and just NODE_W based on the spacing slider.
+   */
+  function effectiveColWidth(fullW: number): number {
+    return Math.round(NODE_W + spacing * (fullW - NODE_W));
+  }
+
+  function position(node: TreeNode, x: number, allocatedW: number, y: number) {
+    // Centre this node within its allocated strip
+    node.x = x + allocatedW / 2 - NODE_W / 2;
     node.y = y;
     allNodes.push(node);
-
-    if (node.x + NODE_W > maxX) maxX = node.x + NODE_W;
-    if (node.y + NODE_H > maxY) maxY = node.y + NODE_H;
+    maxX = Math.max(maxX, node.x + NODE_W);
+    maxY = Math.max(maxY, node.y + NODE_H);
 
     if (node.children.length === 0) return;
 
     const cols = Math.min(node.children.length, MAX_COLS);
     const rowCount = Math.ceil(node.children.length / cols);
 
-    // Compute column widths (max subtree width per column across all rows)
-    const colWidths = new Array(cols).fill(NODE_W);
+    // Compute effective column widths
+    const colFullWidths = new Array(cols).fill(NODE_W);
     for (let r = 0; r < rowCount; r++) {
-      const startIdx = r * cols;
-      const endIdx = Math.min(startIdx + cols, node.children.length);
-      for (let i = startIdx; i < endIdx; i++) {
-        const colIdx = i - startIdx;
-        colWidths[colIdx] = Math.max(colWidths[colIdx], subtreeWidth(node.children[i]));
+      for (let i = r * cols; i < Math.min((r + 1) * cols, node.children.length); i++) {
+        const c = i - r * cols;
+        colFullWidths[c] = Math.max(colFullWidths[c], subtreeWidth(node.children[i]));
       }
     }
+    const colWidths = colFullWidths.map(effectiveColWidth);
+    const gridW = colWidths.reduce((s, w) => s + w, 0) + (cols - 1) * H_GAP;
+    const gridStartX = x + (allocatedW - gridW) / 2;
 
-    const totalGridW = colWidths.reduce((sum, cw) => sum + cw, 0) + (cols - 1) * H_GAP;
-    const gridStartX = x + (w - totalGridW) / 2;
-
-    let currentY = y + NODE_H + V_GAP;
-
+    let curY = y + NODE_H + V_GAP;
     for (let r = 0; r < rowCount; r++) {
-      const startIdx = r * cols;
-      const endIdx = Math.min(startIdx + cols, node.children.length);
-
-      let colX = gridStartX;
-      let maxRowH = 0;
-
-      for (let i = startIdx; i < endIdx; i++) {
-        const colIdx = i - startIdx;
-        const allocatedW = colWidths[colIdx];
-        position(node.children[i], colX, currentY);
-        colX += allocatedW + H_GAP;
-        maxRowH = Math.max(maxRowH, subtreeHeight(node.children[i]));
+      let cx = gridStartX;
+      let rowMaxH = 0;
+      for (let i = r * cols; i < Math.min((r + 1) * cols, node.children.length); i++) {
+        const c = i - r * cols;
+        position(node.children[i], cx, colWidths[c], curY);
+        cx += colWidths[c] + H_GAP;
+        rowMaxH = Math.max(rowMaxH, subtreeHeight(node.children[i]));
       }
-
-      currentY += maxRowH + V_GAP;
+      curY += rowMaxH + V_GAP;
     }
   }
 
   let startX = 0;
   for (const root of roots) {
-    position(root, startX, 0);
-    startX += subtreeWidth(root) + H_GAP * 3;
+    const w = effectiveColWidth(subtreeWidth(root));
+    position(root, startX, w, 0);
+    startX += w + H_GAP * 2;
   }
 
   return { nodes: allNodes, width: maxX + 60, height: maxY + 60 };
@@ -197,7 +188,7 @@ export function SitemapView({ job }: SitemapViewProps) {
   const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
   const [centerOffset, setCenterOffset] = useState<{ x: number; y: number } | null>(null);
 
-  const [spacing, setSpacing] = useState(0.25);
+  const [spacing, setSpacing] = useState(0.3);
 
   const { treeNodes, layoutWidth, layoutHeight, roots } = useMemo(() => {
     const roots = buildTree(job.pages);

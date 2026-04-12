@@ -4,8 +4,8 @@ import type { PageNode } from "@shared/schema";
 const CHROME_PATH = process.env.CHROME_PATH || "/usr/bin/chromium-browser";
 const SCREENSHOT_WIDTH = 1280;
 const SCREENSHOT_HEIGHT = 800;
-const NAV_TIMEOUT = 15000;
-const CONCURRENT_SCREENSHOTS = 5;
+const NAV_TIMEOUT = 20000;
+const CONCURRENT_SCREENSHOTS = 4;
 const MAX_RETRIES = 2;
 
 export async function takeScreenshots(
@@ -32,9 +32,8 @@ export async function takeScreenshots(
         "--disable-extensions",
         "--disable-background-timer-throttling",
         "--disable-backgrounding-occluded-windows",
-        "--js-flags=--max-old-space-size=256",
-        "--single-process",
         "--disable-features=TranslateUI",
+        "--js-flags=--max-old-space-size=512",
       ],
     });
 
@@ -49,41 +48,33 @@ export async function takeScreenshots(
           height: SCREENSHOT_HEIGHT,
         });
 
-        // Block heavy resources to speed up loading
+        // Block heavy media to speed things up, but keep fonts/images/stylesheets
         await page.setRequestInterception(true);
         page.on('request', (req) => {
           const type = req.resourceType();
-          if (['font', 'media'].includes(type)) {
+          if (type === 'media') {
             req.abort();
           } else {
             req.continue();
           }
         });
 
-        // Try networkidle2 (allows 2 open connections) — faster than networkidle0
+        // Navigate with networkidle2 (allows 2 inflight requests)
         try {
           await page.goto(pageNode.url, {
             waitUntil: "networkidle2",
             timeout: NAV_TIMEOUT,
           });
         } catch {
-          // If networkidle2 times out, try domcontentloaded as fallback
-          try {
-            await page.goto(pageNode.url, {
-              waitUntil: "domcontentloaded",
-              timeout: NAV_TIMEOUT,
-            });
-          } catch {
-            // Page is likely rendered enough at this point
-          }
+          // Timeout is ok — page likely rendered, just has lingering requests
         }
 
-        // Short wait for JS rendering
-        await new Promise((r) => setTimeout(r, 800));
+        // Extra wait for JS frameworks to hydrate and render
+        await new Promise((r) => setTimeout(r, 1200));
 
         const screenshotBuffer = await page.screenshot({
           type: "jpeg",
-          quality: 70,
+          quality: 72,
           encoding: "base64",
         });
 
@@ -92,8 +83,14 @@ export async function takeScreenshots(
         processed++;
         onProgress(processed);
       } catch (err) {
+        // Close this page before retrying
+        if (page) {
+          await page.close().catch(() => {});
+          page = undefined;
+        }
         if (attempt < MAX_RETRIES) {
-          if (page) await page.close().catch(() => {});
+          // Small backoff before retry
+          await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
           return captureOne(pageNode, attempt + 1);
         }
         // Exhausted retries — skip
