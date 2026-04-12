@@ -357,11 +357,13 @@ export default function Home() {
                     <ComparisonRow text="Priority crawl speed" included pro />
                     <ComparisonRow text="Export & sharing (coming soon)" included pro />
                   </ul>
-                  <Link href="/pricing">
-                    <button className="w-full mt-6 py-2.5 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-colors cursor-pointer" data-testid="button-go-pro">
-                      Upgrade to Pro
-                    </button>
-                  </Link>
+                  <button
+                    onClick={() => { window.location.hash = user ? "#/pricing" : "#/register/pro"; }}
+                    className="w-full mt-6 py-2.5 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-colors cursor-pointer"
+                    data-testid="button-go-pro"
+                  >
+                    Upgrade to Pro
+                  </button>
                 </div>
               </div>
 

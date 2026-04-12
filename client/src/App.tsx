@@ -18,6 +18,7 @@ function AppRouter() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/register/pro" component={RegisterPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/verify-email" component={VerifyEmailPage} />
       <Route path="/verify/:token" component={VerifyEmailPage} />

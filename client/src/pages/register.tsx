@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff, Crown } from "lucide-react";
 
 export default function RegisterPage() {
   const [, navigate] = useLocation();
@@ -16,6 +16,9 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Check if coming from Pro upgrade flow (/register/pro)
+  const isProFlow = window.location.hash.includes("/register/pro");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,8 +47,17 @@ export default function RegisterPage() {
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200/60 shadow-lg p-8">
-          <h1 className="text-xl font-bold text-gray-900 mb-1">Create your account</h1>
-          <p className="text-sm text-gray-500 mb-6">Start mapping websites visually</p>
+          {isProFlow && (
+            <div className="flex items-center gap-2 mb-5 px-3 py-2.5 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60">
+              <Crown className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <div>
+                <span className="text-xs font-semibold text-amber-700">Step 1 of 2: Create your account</span>
+                <p className="text-[11px] text-amber-600/70">Then you'll set up your Pro subscription</p>
+              </div>
+            </div>
+          )}
+          <h1 className="text-xl font-bold text-gray-900 mb-1">{isProFlow ? "Create your Pro account" : "Create your account"}</h1>
+          <p className="text-sm text-gray-500 mb-6">{isProFlow ? "Sign up to start your $49/month Pro subscription" : "Start mapping websites visually"}</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

@@ -71,7 +71,7 @@ export default function PricingPage() {
 
   async function handleUpgrade() {
     if (!user) {
-      window.location.hash = "#/register";
+      window.location.hash = "#/register/pro";
       return;
     }
     try {
