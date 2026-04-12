@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { CrawlForm } from "@/components/CrawlForm";
 import { CrawlProgress } from "@/components/CrawlProgress";
 import { SitemapView } from "@/components/SitemapView";
-import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import { useAuth } from "@/lib/auth";
 import type { CrawlJob } from "@shared/schema";
 import {
@@ -382,7 +381,6 @@ export default function Home() {
         <SitemapView job={jobData} />
       )}
 
-      <PerplexityAttribution />
     </div>
   );
 }
