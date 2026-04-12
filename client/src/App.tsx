@@ -20,6 +20,7 @@ function AppRouter() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/verify-email" component={VerifyEmailPage} />
+      <Route path="/verify/:token" component={VerifyEmailPage} />
       <Route path="/verify" component={VerifyEmailPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/pricing" component={PricingPage} />

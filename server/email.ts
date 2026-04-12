@@ -12,7 +12,7 @@ const transporter = SMTP_USER
   : null;
 
 export async function sendVerificationEmail(email: string, name: string, token: string): Promise<void> {
-  const verifyUrl = `${APP_URL}/#/verify?token=${token}`;
+  const verifyUrl = `${APP_URL}/#/verify/${token}`;
 
   if (!transporter) {
     console.log(`[EMAIL] Verification link for ${email}: ${verifyUrl}`);

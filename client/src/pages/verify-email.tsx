@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation, Link, useParams } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Loader2, Mail, CheckCircle2, XCircle } from "lucide-react";
 
 export default function VerifyEmailPage() {
   const [, navigate] = useLocation();
+  const params = useParams<{ token?: string }>();
   const { user, refreshUser, token: authToken } = useAuth();
   const { toast } = useToast();
   const [status, setStatus] = useState<"pending" | "verifying" | "success" | "error">("pending");
@@ -16,8 +17,9 @@ export default function VerifyEmailPage() {
 
   // Check if there's a token in the URL (clicked from email)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
-    const tokenParam = params.get("token");
+    // Support both /verify/:token (new) and /verify?token=x (legacy)
+    const queryParams = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    const tokenParam = params.token || queryParams.get("token");
     if (tokenParam) {
       setStatus("verifying");
       const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
@@ -44,7 +46,7 @@ export default function VerifyEmailPage() {
           setErrorMsg("Network error. Please try again.");
         });
     }
-  }, [navigate, refreshUser]);
+  }, [navigate, refreshUser, params.token]);
 
   async function handleResend() {
     setResending(true);
