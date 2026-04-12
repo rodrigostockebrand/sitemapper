@@ -17,6 +17,7 @@ function AppRouter() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/job/:id" component={Home} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register/pro" component={RegisterPage} />
       <Route path="/register" component={RegisterPage} />

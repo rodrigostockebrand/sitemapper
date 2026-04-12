@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import { CrawlForm } from "@/components/CrawlForm";
 import { CrawlProgress } from "@/components/CrawlProgress";
 import { SitemapView } from "@/components/SitemapView";
@@ -133,6 +133,8 @@ function SitemapLogo({ className = "" }: { className?: string }) {
 
 export default function Home() {
   const { user, limits } = useAuth();
+  const routeParams = useParams<{ id?: string }>();
+  const [, navigate] = useLocation();
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [jobData, setJobData] = useState<CrawlJob | null>(null);
   const [isComplete, setIsComplete] = useState(false);
@@ -142,14 +144,12 @@ export default function Home() {
     document.documentElement.classList.remove("dark");
   }, []);
 
-  // Handle ?job=ID from dashboard links
+  // Handle /job/:id route from dashboard links
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
-    const jobParam = params.get("job");
-    if (jobParam && !currentJobId) {
-      setCurrentJobId(jobParam);
+    if (routeParams.id && !currentJobId) {
+      setCurrentJobId(routeParams.id);
     }
-  }, [currentJobId]);
+  }, [routeParams.id, currentJobId]);
 
   const handleCrawlStarted = (jobId: string) => {
     setCurrentJobId(jobId);
@@ -166,6 +166,8 @@ export default function Home() {
     setCurrentJobId(null);
     setJobData(null);
     setIsComplete(false);
+    // Navigate back to root so URL stays in sync
+    navigate("/");
   };
 
   const showLanding = !currentJobId && !isComplete;

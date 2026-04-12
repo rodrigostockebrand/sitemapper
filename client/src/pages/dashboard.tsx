@@ -153,7 +153,7 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-3">
             {crawls.map((crawl) => (
-              <Link key={crawl.id} href={`/?job=${crawl.id}`}>
+              <Link key={crawl.id} href={`/job/${crawl.id}`}>
                 <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm p-4 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer" data-testid={`crawl-item-${crawl.id}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
