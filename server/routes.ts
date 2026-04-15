@@ -441,7 +441,7 @@ export async function registerRoutes(
         customer: customerId,
         mode: "subscription",
         line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
-        success_url: `${APP_URL}/#/dashboard?upgraded=true`,
+        success_url: `${APP_URL}/#/upgrade-success`,
         cancel_url: `${APP_URL}/#/pricing`,
         subscription_data: {
           metadata: { userId: user.id },
