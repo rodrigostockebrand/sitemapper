@@ -11,6 +11,7 @@ import RegisterPage from "@/pages/register";
 import VerifyEmailPage from "@/pages/verify-email";
 import DashboardPage from "@/pages/dashboard";
 import PricingPage from "@/pages/pricing";
+import PrivacyPage from "@/pages/privacy";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -26,6 +27,7 @@ function AppRouter() {
       <Route path="/verify" component={VerifyEmailPage} />
       <Route path="/dashboard" component={DashboardPage} />
       <Route path="/pricing" component={PricingPage} />
+      <Route path="/privacy" component={PrivacyPage} />
       <Route component={NotFound} />
     </Switch>
   );

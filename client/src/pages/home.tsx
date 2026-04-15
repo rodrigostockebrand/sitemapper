@@ -16,6 +16,8 @@ import {
   Check,
   X,
   Infinity,
+  Mail,
+  Shield,
 } from "lucide-react";
 
 /* ── real website screenshot tiles ─────────────────────────── */
@@ -371,6 +373,28 @@ export default function Home() {
               {/* Bottom nudge */}
               <p className="text-center text-xs text-gray-500 mt-6">Cancel anytime. No contracts. Payments via Stripe.</p>
             </div>
+
+            {/* Footer */}
+            <footer className="max-w-screen-xl mx-auto px-4 mt-20 pb-8">
+              <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p className="text-xs text-gray-500">&copy; {new Date().getFullYear()} The Visual Sitemapper. All rights reserved.</p>
+                <div className="flex items-center gap-5">
+                  <Link href="/privacy">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors cursor-pointer">
+                      <Shield className="w-3 h-3" />
+                      Privacy Policy
+                    </span>
+                  </Link>
+                  <a
+                    href="mailto:support@thevisualsitemap.com"
+                    className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    <Mail className="w-3 h-3" />
+                    Get Support
+                  </a>
+                </div>
+              </div>
+            </footer>
           </div>
         </div>
       )}
