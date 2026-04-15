@@ -141,6 +141,8 @@ export interface IStorage {
   getUserById(id: string): User | undefined;
   updateUser(id: string, update: Partial<Pick<User, "emailVerified" | "tier" | "stripeCustomerId" | "stripeSubscriptionId" | "name">>): User | undefined;
 
+  getUserByStripeCustomerId(stripeCustomerId: string): User | undefined;
+
   // Verification tokens
   createVerificationToken(token: VerificationToken): VerificationToken;
   getVerificationToken(token: string): VerificationToken | undefined;
@@ -210,6 +212,11 @@ export class SqliteStorage implements IStorage {
 
   getUserById(id: string): User | undefined {
     const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as any;
+    return row ? userFromRow(row) : undefined;
+  }
+
+  getUserByStripeCustomerId(stripeCustomerId: string): User | undefined {
+    const row = db.prepare("SELECT * FROM users WHERE stripe_customer_id = ?").get(stripeCustomerId) as any;
     return row ? userFromRow(row) : undefined;
   }
 

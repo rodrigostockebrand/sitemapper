@@ -13,7 +13,10 @@ import {
   Plus,
   Crown,
   Zap,
+  CreditCard,
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface CrawlSummary {
   id: string;
@@ -60,10 +63,24 @@ export default function DashboardPage() {
     }
   }, [authLoading, user, navigate]);
 
+  const { toast } = useToast();
+
   const { data: crawls, isLoading } = useQuery<CrawlSummary[]>({
     queryKey: ["/api/crawls"],
     enabled: !!user,
   });
+
+  async function handleManageBilling() {
+    try {
+      const res = await apiRequest("POST", "/api/billing/portal");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: "Could not open billing portal.", variant: "destructive" });
+    }
+  }
 
   if (authLoading) {
     return (
@@ -112,6 +129,15 @@ export default function DashboardPage() {
                   ? `${crawlsThisMonth} of ${limits?.monthlyCredits ?? 5} sitemaps used this month · Max ${limits?.maxPages ?? 100} pages per crawl`
                   : `Unlimited sitemaps · Up to ${limits?.maxPages ?? 1000} pages per crawl`}
               </p>
+              {!isFree && (
+                <button
+                  onClick={handleManageBilling}
+                  className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1"
+                >
+                  <CreditCard className="w-3 h-3" />
+                  Manage billing
+                </button>
+              )}
             </div>
             <Link href="/">
               <Button size="sm" className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white">

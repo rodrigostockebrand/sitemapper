@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Check, Crown, Zap } from "lucide-react";
+import { Check, Crown, Zap, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -69,22 +70,49 @@ export default function PricingPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  const [loading, setLoading] = useState(false);
+
   async function handleUpgrade() {
     if (!user) {
       window.location.hash = "#/register/pro";
       return;
     }
+    setLoading(true);
     try {
       const res = await apiRequest("POST", "/api/billing/checkout");
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "No checkout URL returned");
       }
     } catch (err: any) {
       toast({
-        title: "Stripe integration coming soon",
-        description: "Payment processing is being set up. Contact us for early Pro access.",
+        title: "Error",
+        description: err.message || "Failed to start checkout. Please try again.",
+        variant: "destructive",
       });
+      setLoading(false);
+    }
+  }
+
+  async function handleManageBilling() {
+    setLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/billing/portal");
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.error || "Could not open billing portal");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to open billing portal.",
+        variant: "destructive",
+      });
+      setLoading(false);
     }
   }
 
@@ -131,10 +159,23 @@ export default function PricingPage() {
               "Priority crawl speed",
               "Export & sharing (coming soon)",
             ]}
-            cta="Upgrade to Pro"
+            cta={loading ? "Redirecting..." : "Upgrade to Pro"}
             onCta={handleUpgrade}
           />
         </div>
+
+        {user?.tier === "pro" && (
+          <div className="text-center mt-8">
+            <button
+              onClick={handleManageBilling}
+              disabled={loading}
+              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <CreditCard className="w-4 h-4" />
+              Manage billing &amp; subscription
+            </button>
+          </div>
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-8">
           Prices in USD. Cancel anytime. Payments processed securely via Stripe.

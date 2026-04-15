@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { randomUUID, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
+import Stripe from "stripe";
 import { storage, safeUser } from "./storage";
 import {
   crawlRequestSchema,
@@ -15,6 +16,15 @@ import { takeScreenshots } from "./screenshotter";
 import { WebSocketServer } from "ws";
 import { signToken, optionalAuth, requireAuth, getRequestUser } from "./auth";
 import { sendVerificationEmail } from "./email";
+
+// ── Stripe setup ───────────────────────────────────────────
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
+
+const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || "";
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
+const APP_URL = process.env.APP_URL || "https://app.thevisualsitemap.com";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -400,24 +410,155 @@ export async function registerRoutes(
     res.json(jobs);
   });
 
-  // ── Stripe placeholder routes ───────────────────────────
+  // ── Stripe billing routes ──────────────────────────────
 
-  // Create checkout session (placeholder — implement with Stripe later)
-  app.post("/api/billing/checkout", requireAuth, (_req, res) => {
-    // TODO: Integrate with Stripe to create a checkout session
-    // const session = await stripe.checkout.sessions.create({ ... });
-    // return res.json({ url: session.url });
-    res.status(501).json({ error: "Stripe billing is not yet configured. Coming soon!" });
+  // Create checkout session → redirect user to Stripe-hosted payment page
+  app.post("/api/billing/checkout", requireAuth, async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: "Stripe is not configured" });
+      }
+
+      const user = getRequestUser(req)!;
+
+      if (user.tier === "pro") {
+        return res.status(400).json({ error: "You are already on the Pro plan" });
+      }
+
+      // Reuse existing Stripe customer or create a new one
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.name,
+          metadata: { userId: user.id },
+        });
+        customerId = customer.id;
+        storage.updateUser(user.id, { stripeCustomerId: customerId });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+        success_url: `${APP_URL}/#/dashboard?upgraded=true`,
+        cancel_url: `${APP_URL}/#/pricing`,
+        subscription_data: {
+          metadata: { userId: user.id },
+        },
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("Checkout error:", err.message);
+      res.status(500).json({ error: "Failed to create checkout session" });
+    }
   });
 
-  // Billing portal (placeholder)
-  app.post("/api/billing/portal", requireAuth, (_req, res) => {
-    res.status(501).json({ error: "Stripe billing portal is not yet configured." });
+  // Billing portal → let Pro users manage subscription, update card, cancel
+  app.post("/api/billing/portal", requireAuth, async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: "Stripe is not configured" });
+      }
+
+      const user = getRequestUser(req)!;
+      if (!user.stripeCustomerId) {
+        return res.status(400).json({ error: "No billing account found" });
+      }
+
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripeCustomerId,
+        return_url: `${APP_URL}/#/dashboard`,
+      });
+
+      res.json({ url: session.url });
+    } catch (err: any) {
+      console.error("Portal error:", err.message);
+      res.status(500).json({ error: "Failed to open billing portal" });
+    }
   });
 
-  // Stripe webhook (placeholder)
-  app.post("/api/billing/webhook", (_req, res) => {
-    // TODO: Handle subscription.created, subscription.deleted, etc.
+  // Stripe webhook → handle subscription lifecycle events
+  app.post("/api/billing/webhook", async (req, res) => {
+    if (!stripe) {
+      return res.status(503).json({ error: "Stripe not configured" });
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      if (STRIPE_WEBHOOK_SECRET) {
+        const sig = req.headers["stripe-signature"] as string;
+        event = stripe.webhooks.constructEvent(
+          req.rawBody as Buffer,
+          sig,
+          STRIPE_WEBHOOK_SECRET
+        );
+      } else {
+        // No webhook secret configured — trust the payload (dev only)
+        event = req.body as Stripe.Event;
+      }
+    } catch (err: any) {
+      console.error("Webhook signature verification failed:", err.message);
+      return res.status(400).json({ error: "Webhook verification failed" });
+    }
+
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object as Stripe.Checkout.Session;
+          if (session.mode === "subscription" && session.customer) {
+            const customerId = typeof session.customer === "string" ? session.customer : session.customer.id;
+            const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+            const user = storage.getUserByStripeCustomerId(customerId);
+            if (user) {
+              storage.updateUser(user.id, {
+                tier: "pro",
+                stripeSubscriptionId: subscriptionId || null,
+              });
+              console.log(`User ${user.email} upgraded to Pro (subscription: ${subscriptionId})`);
+            }
+          }
+          break;
+        }
+
+        case "customer.subscription.updated": {
+          const sub = event.data.object as Stripe.Subscription;
+          const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+          const user = storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            // If subscription is canceled at period end or past_due, keep pro until period ends
+            // If status is active, ensure they're pro
+            if (sub.status === "active") {
+              storage.updateUser(user.id, { tier: "pro", stripeSubscriptionId: sub.id });
+            } else if (sub.status === "canceled" || sub.status === "unpaid") {
+              storage.updateUser(user.id, { tier: "free", stripeSubscriptionId: null });
+              console.log(`User ${user.email} downgraded to Free (subscription ${sub.status})`);
+            }
+          }
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          const sub = event.data.object as Stripe.Subscription;
+          const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+          const user = storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            storage.updateUser(user.id, { tier: "free", stripeSubscriptionId: null });
+            console.log(`User ${user.email} subscription deleted — downgraded to Free`);
+          }
+          break;
+        }
+
+        default:
+          // Unhandled event type — ignore
+          break;
+      }
+    } catch (err: any) {
+      console.error("Webhook handler error:", err.message);
+    }
+
     res.json({ received: true });
   });
 

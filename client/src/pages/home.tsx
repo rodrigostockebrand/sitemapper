@@ -3,7 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { CrawlForm } from "@/components/CrawlForm";
 import { CrawlProgress } from "@/components/CrawlProgress";
 import { SitemapView } from "@/components/SitemapView";
-import { useAuth } from "@/lib/auth";
+import { useAuth, getAuthToken } from "@/lib/auth";
 import type { CrawlJob } from "@shared/schema";
 import {
   Camera,
@@ -362,7 +362,18 @@ export default function Home() {
                   </ul>
                   <div className="mt-auto">
                     <button
-                      onClick={() => { window.location.hash = user ? "#/pricing" : "#/register/pro"; }}
+                      onClick={async () => {
+                        if (!user) { window.location.hash = "#/register/pro"; return; }
+                        try {
+                          const res = await fetch(`${"__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__"}/api/billing/checkout`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", ...(user ? { Authorization: `Bearer ${getAuthToken()}` } : {}) },
+                          });
+                          const data = await res.json();
+                          if (data.url) window.location.href = data.url;
+                          else window.location.hash = "#/pricing";
+                        } catch { window.location.hash = "#/pricing"; }
+                      }}
                       className="w-full mt-6 py-2.5 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-colors cursor-pointer"
                       data-testid="button-go-pro"
                     >
