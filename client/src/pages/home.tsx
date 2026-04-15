@@ -420,6 +420,31 @@ export default function Home() {
         <SitemapView job={jobData} />
       )}
 
+      {/* Footer on crawl/results pages */}
+      {!showLanding && (
+        <footer className="border-t border-border/60 bg-background">
+          <div className="max-w-screen-xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">&copy; {new Date().getFullYear()} The Visual Sitemapper</p>
+            <div className="flex items-center gap-5">
+              <a
+                href="mailto:support@thevisualsitemap.com?subject=Support%20Request&body=Please%20describe%20your%20issue%20below.%20If%20possible%2C%20attach%20a%20screenshot%20showing%20the%20problem.%0A%0A"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="link-support-footer"
+              >
+                <Mail className="w-3 h-3" />
+                Need help? Submit a ticket (include a screenshot)
+              </a>
+              <Link href="/privacy">
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                  <Shield className="w-3 h-3" />
+                  Privacy
+                </span>
+              </Link>
+            </div>
+          </div>
+        </footer>
+      )}
+
     </div>
   );
 }
