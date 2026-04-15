@@ -323,7 +323,7 @@ export default function Home() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Free tier card */}
-                <div className="rounded-2xl p-6" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div className="rounded-2xl p-6 flex flex-col" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
                   <h3 className="text-lg font-bold text-white mb-1">Free</h3>
                   <p className="text-2xl font-bold text-white mb-5">$0 <span className="text-sm font-normal text-gray-500">forever</span></p>
                   <ul className="space-y-3">
@@ -336,7 +336,7 @@ export default function Home() {
                     <ComparisonRow text="Up to 1,000 pages per sitemap" />
                     <ComparisonRow text="Priority crawl speed" />
                   </ul>
-                  <Link href="/register">
+                  <Link href="/register" className="mt-auto">
                     <button className="w-full mt-6 py-2.5 rounded-lg text-sm font-medium text-white border border-white/15 hover:bg-white/10 transition-colors cursor-pointer" data-testid="button-free-signup">
                       Get Started Free
                     </button>
@@ -344,7 +344,7 @@ export default function Home() {
                 </div>
 
                 {/* Pro tier card */}
-                <div className="rounded-2xl p-6 relative overflow-hidden" style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(6,182,212,0.10) 100%)", border: "1px solid rgba(59,130,246,0.25)" }}>
+                <div className="rounded-2xl p-6 relative overflow-hidden flex flex-col" style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(6,182,212,0.10) 100%)", border: "1px solid rgba(59,130,246,0.25)" }}>
                   <div className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-1 rounded-full">Most Popular</div>
                   <div className="flex items-center gap-2 mb-1">
                     <Crown className="w-4 h-4 text-amber-400" />
@@ -362,7 +362,7 @@ export default function Home() {
                   </ul>
                   <button
                     onClick={() => { window.location.hash = user ? "#/pricing" : "#/register/pro"; }}
-                    className="w-full mt-6 py-2.5 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-colors cursor-pointer"
+                    className="w-full mt-auto pt-6 py-2.5 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-colors cursor-pointer"
                     data-testid="button-go-pro"
                   >
                     Upgrade to Pro
