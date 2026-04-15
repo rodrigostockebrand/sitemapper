@@ -49,8 +49,8 @@ function buildTree(pages: PageNode[]): TreeNode[] {
 }
 
 // Layout constants
-const NODE_W = 170;
-const NODE_H = 150;
+const NODE_W = 240;
+const NODE_H = 200;
 const MAX_COLS = 10; // Max children per row before wrapping
 
 /**
@@ -184,7 +184,7 @@ function layoutTree(
 
 export function SitemapView({ job }: SitemapViewProps) {
   const [selectedNode, setSelectedNode] = useState<PageNode | null>(null);
-  const [zoom, setZoom] = useState(0.65);
+  const [zoom, setZoom] = useState(0.5);
   const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
   const [centerOffset, setCenterOffset] = useState<{ x: number; y: number } | null>(null);
 

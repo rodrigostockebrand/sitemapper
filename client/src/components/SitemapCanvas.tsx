@@ -4,8 +4,8 @@ import type { PageNode } from "@shared/schema";
 import { screenshotUrl } from "@/lib/api";
 import { FileText, FileImage, File, Globe } from "lucide-react";
 
-const NODE_W = 170;
-const NODE_H = 150;
+const NODE_W = 240;
+const NODE_H = 200;
 
 interface SitemapCanvasProps {
   treeNodes: TreeNode[];
@@ -166,12 +166,13 @@ export function SitemapCanvas({
             data-testid={`node-${node.id}`}
           >
             {/* Screenshot thumbnail */}
-            <div className="w-full h-[100px] bg-muted/50 relative overflow-hidden">
+            <div className="w-full h-[152px] bg-muted/50 relative overflow-hidden">
               {node.hasScreenshot ? (
                 <img
                   src={screenshotUrl(jobId, node.id)}
                   alt={node.title}
                   className="w-full h-full object-cover object-top"
+                  style={{ imageRendering: "auto" }}
                   loading="lazy"
                 />
               ) : (
@@ -201,11 +202,11 @@ export function SitemapCanvas({
               />
             </div>
             {/* Label */}
-            <div className="px-2 py-1.5">
-              <p className="text-[10px] font-medium leading-tight truncate" title={node.title}>
+            <div className="px-2.5 py-2">
+              <p className="text-[11px] font-medium leading-tight truncate" title={node.title}>
                 {node.title || node.path}
               </p>
-              <p className="text-[9px] text-muted-foreground truncate" title={node.path}>
+              <p className="text-[10px] text-muted-foreground truncate" title={node.path}>
                 {node.path}
               </p>
             </div>

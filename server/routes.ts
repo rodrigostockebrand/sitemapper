@@ -391,7 +391,7 @@ export async function registerRoutes(
     if (!buffer) {
       return res.status(404).json({ error: "Screenshot not found" });
     }
-    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Content-Type", "image/webp");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(buffer);
   });

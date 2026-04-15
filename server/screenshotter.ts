@@ -4,6 +4,7 @@ import type { PageNode } from "@shared/schema";
 const CHROME_PATH = process.env.CHROME_PATH || "/usr/bin/chromium-browser";
 const SCREENSHOT_WIDTH = 1280;
 const SCREENSHOT_HEIGHT = 800;
+const DEVICE_SCALE_FACTOR = 2;
 const NAV_TIMEOUT = 20000;
 const CONCURRENT_SCREENSHOTS = 4;
 const MAX_RETRIES = 2;
@@ -46,6 +47,7 @@ export async function takeScreenshots(
         await page.setViewport({
           width: SCREENSHOT_WIDTH,
           height: SCREENSHOT_HEIGHT,
+          deviceScaleFactor: DEVICE_SCALE_FACTOR,
         });
 
         // Block heavy media to speed things up, but keep fonts/images/stylesheets
@@ -73,8 +75,8 @@ export async function takeScreenshots(
         await new Promise((r) => setTimeout(r, 1200));
 
         const screenshotBuffer = await page.screenshot({
-          type: "jpeg",
-          quality: 72,
+          type: "webp",
+          quality: 85,
           encoding: "base64",
         });
 
