@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "fs";
 import { join } from "path";
 import type { CrawlJob, PageNode, User, SafeUser, VerificationToken, SubscriptionTier } from "@shared/schema";
 
@@ -363,6 +363,13 @@ export class SqliteStorage implements IStorage {
 
   deleteCrawlJob(id: string): boolean {
     const result = db.prepare("DELETE FROM crawl_jobs WHERE id = ?").run(id);
+    // Clean up screenshot files on disk
+    const jobDir = join(SCREENSHOTS_DIR, id);
+    try {
+      rmSync(jobDir, { recursive: true, force: true });
+    } catch {
+      // Directory may not exist — that's fine
+    }
     return result.changes > 0;
   }
 

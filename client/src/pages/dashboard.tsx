@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -14,8 +14,10 @@ import {
   Crown,
   Zap,
   CreditCard,
+  Trash2,
+  X,
 } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 interface CrawlSummary {
@@ -56,6 +58,8 @@ function timeAgo(dateStr: string): string {
 export default function DashboardPage() {
   const [, navigate] = useLocation();
   const { user, limits, crawlsThisMonth, crawlsRemaining, loading: authLoading } = useAuth();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -79,6 +83,20 @@ export default function DashboardPage() {
       }
     } catch (err: any) {
       toast({ title: "Error", description: "Could not open billing portal.", variant: "destructive" });
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(id);
+    try {
+      await apiRequest("DELETE", `/api/crawls/${id}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/crawls"] });
+      toast({ title: "Sitemap deleted" });
+    } catch (err: any) {
+      toast({ title: "Error", description: "Could not delete sitemap.", variant: "destructive" });
+    } finally {
+      setDeleting(null);
+      setConfirmDeleteId(null);
     }
   }
 
@@ -179,29 +197,84 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-3">
             {crawls.map((crawl) => (
-              <Link key={crawl.id} href={`/job/${crawl.id}`}>
-                <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm p-4 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer" data-testid={`crawl-item-${crawl.id}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center">
-                        <Globe className="w-4 h-4 text-gray-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{crawl.domain}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-gray-400 flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {timeAgo(crawl.startedAt)}
-                          </span>
-                          <span className="text-xs text-gray-400">·</span>
-                          <span className="text-xs text-gray-400">{crawl.totalPages} pages</span>
+              <div key={crawl.id} className="relative group">
+                <Link href={`/job/${crawl.id}`}>
+                  <div className="bg-white rounded-xl border border-gray-200/60 shadow-sm p-4 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer" data-testid={`crawl-item-${crawl.id}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center">
+                          <Globe className="w-4 h-4 text-gray-500" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{crawl.domain}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {timeAgo(crawl.startedAt)}
+                            </span>
+                            <span className="text-xs text-gray-400">·</span>
+                            <span className="text-xs text-gray-400">{crawl.totalPages} pages</span>
+                          </div>
                         </div>
                       </div>
+                      <div className="flex items-center gap-2">
+                        {statusBadge(crawl.status)}
+                      </div>
                     </div>
-                    {statusBadge(crawl.status)}
                   </div>
-                </div>
-              </Link>
+                </Link>
+
+                {/* Delete button — shows on hover */}
+                {confirmDeleteId === crawl.id ? (
+                  <div
+                    className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 bg-white border border-red-200 rounded-lg px-2 py-1.5 shadow-lg z-10"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <span className="text-xs text-red-600 font-medium whitespace-nowrap">Delete this sitemap?</span>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDelete(crawl.id);
+                      }}
+                      disabled={deleting === crawl.id}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors disabled:opacity-50"
+                      data-testid={`confirm-delete-${crawl.id}`}
+                    >
+                      {deleting === crawl.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                      Yes
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setConfirmDeleteId(null);
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setConfirmDeleteId(crawl.id);
+                    }}
+                    className="absolute right-14 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all z-10"
+                    title="Delete sitemap"
+                    data-testid={`delete-btn-${crawl.id}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}

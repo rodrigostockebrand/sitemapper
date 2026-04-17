@@ -410,6 +410,20 @@ export async function registerRoutes(
     res.json(jobs);
   });
 
+  // Delete a crawl job (owner only)
+  app.delete("/api/crawls/:id", requireAuth, (req, res) => {
+    const user = getRequestUser(req)!;
+    const job = storage.getCrawlJob(req.params.id);
+    if (!job) {
+      return res.status(404).json({ error: "Crawl job not found" });
+    }
+    if (job.userId !== user.id) {
+      return res.status(403).json({ error: "Not authorized to delete this job" });
+    }
+    storage.deleteCrawlJob(req.params.id);
+    res.json({ ok: true });
+  });
+
   // ── Stripe billing routes ──────────────────────────────
 
   // Create checkout session → redirect user to Stripe-hosted payment page
