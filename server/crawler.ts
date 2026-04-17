@@ -394,20 +394,26 @@ export async function crawlSite(
         try {
           const id = visited.get(item.url) || randomUUID();
 
-          // Fetch the page — use browser if the site requires it
+          // Fetch the page — try HTTP first, fall back to browser on failure
           let result: { body: string; statusCode: number; contentType: string; ok: boolean };
 
           try {
             if (siteNeedsBrowser) {
+              // Site already known to need browser — skip HTTP entirely
               result = await withTimeout(fetchPageWithBrowser(pool, item.url), 20000);
             } else {
               result = await withTimeout(fetchPage(item.url), FETCH_TIMEOUT + 2000);
 
-              // If HTTP fetch failed on first page, mark site as needing browser
-              if (!result.ok && item.depth === 0) {
-                console.log(`[crawler] Site needs browser rendering, switching to browser mode`);
-                siteNeedsBrowser = true;
+              // If HTTP fetch failed (403, challenged, etc.), try browser fallback
+              if (!result.ok) {
+                console.log(`[crawler] HTTP failed (${result.statusCode}) for ${item.url}, trying browser...`);
                 result = await withTimeout(fetchPageWithBrowser(pool, item.url), 20000);
+
+                // If browser worked, mark site as needing browser for all future pages
+                if (result.ok) {
+                  siteNeedsBrowser = true;
+                  console.log(`[crawler] Browser succeeded — switching to browser mode for all pages`);
+                }
               }
             }
           } catch {
