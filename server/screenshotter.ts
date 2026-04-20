@@ -112,6 +112,29 @@ export async function takeScreenshots(
               }
             });
 
+            // Pre-set common consent cookies BEFORE navigation
+            // This prevents consent modals from appearing at all
+            const domain = new URL(pageNode.url).hostname;
+            const baseDomain = domain.replace(/^www\./, "");
+            try {
+              await page.setCookie(
+                // OneTrust
+                { name: "OptanonConsent", value: "isGpcEnabled=0&datestamp=" + encodeURIComponent(new Date().toISOString()) + "&version=202409.2.0&isIABGlobal=false&hosts=&consentId=00000000-0000-0000-0000-000000000000&interactionCount=1&landingPath=NotLandingPage&groups=C0001%3A1%2CC0002%3A1%2CC0003%3A1%2CC0004%3A1&geolocation=US%3BCA", domain: "." + baseDomain, path: "/" },
+                { name: "OptanonAlertBoxClosed", value: new Date().toISOString(), domain: "." + baseDomain, path: "/" },
+                // CookieBot
+                { name: "CookieConsent", value: "{stamp:%27-1%27%2Cnecessary:true%2Cpreferences:true%2Cstatistics:true%2Cmarketing:true%2Cmethod:%27explicit%27%2Cver:1%2Cutc:" + Date.now() + "%2Cregion:%27us%27}", domain: "." + baseDomain, path: "/" },
+                // Generic cookie consent flags
+                { name: "cookie_consent", value: "accepted", domain: "." + baseDomain, path: "/" },
+                { name: "cookies_accepted", value: "true", domain: "." + baseDomain, path: "/" },
+                { name: "gdpr_consent", value: "1", domain: "." + baseDomain, path: "/" },
+                { name: "cookie-agreed", value: "2", domain: "." + baseDomain, path: "/" },
+                { name: "cookieconsent_status", value: "dismiss", domain: "." + baseDomain, path: "/" },
+                { name: "cc_cookie", value: '{"categories":["necessary","analytics","targeting"]}', domain: "." + baseDomain, path: "/" },
+              );
+            } catch {
+              // Cookie setting is best-effort
+            }
+
             // Navigate — use domcontentloaded as primary, it's faster and
             // won't hang on sites with persistent connections
             try {
@@ -126,54 +149,122 @@ export async function takeScreenshots(
             // Brief wait for JS to hydrate and render visible content
             await new Promise((r) => setTimeout(r, 1200));
 
-            // Try to dismiss common cookie/consent banners (best-effort, with its own timeout)
+            // Layer 1: Try to click common accept/dismiss buttons
             try {
               await withTimeout(
                 page.evaluate(() => {
+                  // Find buttons by text content (most reliable)
+                  const acceptTexts = [
+                    "accept all", "accept cookies", "allow all", "allow cookies",
+                    "i agree", "i accept", "agree", "got it", "ok", "okay",
+                    "continue", "dismiss", "close", "accept & close",
+                    "accept and close", "accept recommended",
+                  ];
+                  const allButtons = Array.from(document.querySelectorAll<HTMLElement>(
+                    "button, a[role=button], [role=button], .btn, [class*=btn]"
+                  ));
+                  for (const btn of allButtons) {
+                    const text = btn.textContent?.trim().toLowerCase() || "";
+                    if (acceptTexts.some((t) => text === t || text.startsWith(t))) {
+                      btn.click();
+                      return; // Found and clicked
+                    }
+                  }
+
+                  // Fallback: try specific selectors
                   const selectors = [
-                    '[id*="cookie"] button',
-                    '[class*="cookie"] button',
-                    '[id*="consent"] button',
-                    '[class*="consent"] button',
-                    '[id*="onetrust"] button#onetrust-accept-btn-handler',
-                    '[class*="onetrust"] button',
-                    'button[aria-label*="accept"]',
-                    'button[aria-label*="Accept"]',
-                    'button[aria-label*="agree"]',
-                    'button[aria-label*="Agree"]',
-                    '[id*="gdpr"] button',
-                    '[class*="gdpr"] button',
-                    '[data-testid*="cookie"] button',
-                    '[data-testid*="accept"]',
-                    'button[title*="Accept"]',
-                    '.cc-btn.cc-dismiss',
-                    '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+                    "#onetrust-accept-btn-handler",
+                    "#accept-recommended-btn-handler",
+                    ".onetrust-close-btn-handler",
+                    "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+                    "#CybotCookiebotDialogBodyButtonAccept",
+                    ".cc-btn.cc-dismiss",
+                    ".cc-accept",
+                    "[data-testid=cookie-accept]",
+                    "[data-testid=accept-cookies]",
+                    'button[aria-label*="ccept"]',
+                    'button[aria-label*="gree"]',
+                    'button[title*="ccept"]',
                   ];
                   for (const sel of selectors) {
                     const btn = document.querySelector<HTMLElement>(sel);
-                    if (btn && btn.offsetParent !== null) {
+                    if (btn) {
                       btn.click();
-                      break;
+                      return;
                     }
                   }
-                  const overlaySelectors = [
-                    '[id*="cookie-banner"]',
-                    '[class*="cookie-banner"]',
-                    '[id*="cookie-consent"]',
-                    '[class*="cookie-consent"]',
-                    '[id*="onetrust-banner"]',
-                    '[class*="onetrust-banner"]',
-                    '[id*="consent-banner"]',
-                    '[class*="consent-modal"]',
-                    '[class*="privacy-banner"]',
+                }),
+                2000,
+                "consent click"
+              );
+            } catch {
+              // Best-effort
+            }
+
+            // Small wait for consent modal to animate away
+            await new Promise((r) => setTimeout(r, 500));
+
+            // Layer 2: Nuclear — remove ANY fixed/sticky overlay covering the viewport
+            try {
+              await withTimeout(
+                page.evaluate(() => {
+                  const vw = window.innerWidth;
+                  const vh = window.innerHeight;
+                  const threshold = 0.3; // covers >30% of viewport
+
+                  // Remove known consent frameworks by selector
+                  const knownOverlays = [
+                    "#onetrust-consent-sdk", "#onetrust-banner-sdk",
+                    "#CybotCookiebotDialog", "#CybotCookiebotDialogBodyUnderlay",
+                    "[class*=cookie-banner]", "[class*=cookie-consent]",
+                    "[class*=cookieBanner]", "[class*=cookieConsent]",
+                    "[class*=consent-banner]", "[class*=consent-modal]",
+                    "[class*=privacy-banner]", "[class*=gdpr]",
+                    "[id*=cookie-banner]", "[id*=cookie-consent]",
+                    "[id*=consent-banner]", "[id*=gdpr]",
+                    ".truste_box_overlay", "#truste-consent-track",
+                    "[class*=evidon]", "#_evidon_banner",
                   ];
-                  for (const sel of overlaySelectors) {
-                    const el = document.querySelector<HTMLElement>(sel);
-                    if (el) el.remove();
+                  for (const sel of knownOverlays) {
+                    document.querySelectorAll(sel).forEach((el) => el.remove());
                   }
+
+                  // Find and remove any large fixed/sticky overlays
+                  const allElements = document.querySelectorAll("*");
+                  for (const el of allElements) {
+                    const style = window.getComputedStyle(el);
+                    const pos = style.position;
+                    if (pos !== "fixed" && pos !== "sticky") continue;
+
+                    const rect = (el as HTMLElement).getBoundingClientRect();
+                    const coverageX = rect.width / vw;
+                    const coverageY = rect.height / vh;
+
+                    // Remove if it covers a significant portion of the viewport
+                    if (coverageX * coverageY > threshold) {
+                      (el as HTMLElement).remove();
+                      continue;
+                    }
+
+                    // Also remove backdrop/overlay elements (dark semi-transparent backgrounds)
+                    const bg = style.backgroundColor;
+                    const opacity = parseFloat(style.opacity);
+                    if (
+                      coverageX > 0.8 && coverageY > 0.8 &&
+                      (bg.includes("rgba") || opacity < 0.95)
+                    ) {
+                      (el as HTMLElement).remove();
+                    }
+                  }
+
+                  // Reset any body overflow locks that consent modals set
+                  document.body.style.overflow = "";
+                  document.body.style.position = "";
+                  document.documentElement.style.overflow = "";
+                  document.documentElement.style.position = "";
                 }),
                 3000,
-                "consent dismissal"
+                "overlay removal"
               );
             } catch {
               // Best-effort
