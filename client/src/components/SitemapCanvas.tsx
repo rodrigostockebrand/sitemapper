@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect, memo } from "react";
+import { useRef, useState, useCallback, useEffect, memo, useMemo } from "react";
 import type { TreeNode } from "@/components/SitemapView";
 import type { PageNode } from "@shared/schema";
 import { screenshotUrl } from "@/lib/api";
@@ -118,6 +118,93 @@ function ZoomSelectionOverlayImpl({
 }
 const ZoomSelectionOverlay = memo(ZoomSelectionOverlayImpl);
 
+/**
+ * Memoized node card. Only re-renders when its inputs actually change,
+ * not when the parent pans/zooms. This is the single biggest perf win
+ * for large sitemaps because the card tree contains hundreds of <img> tags.
+ */
+interface NodeCardProps {
+  node: TreeNode;
+  jobId: string;
+  selected: boolean;
+  onSelect: (node: PageNode) => void;
+}
+function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
+  const isError = node.statusCode >= 400 || node.statusCode === 0;
+  const fileIcon =
+    node.fileType === "html" ? (
+      <Globe className="w-3 h-3" />
+    ) : node.fileType === "pdf" ? (
+      <FileText className="w-3 h-3" />
+    ) : node.fileType === "image" ? (
+      <FileImage className="w-3 h-3" />
+    ) : (
+      <File className="w-3 h-3" />
+    );
+  return (
+    <div
+      className={`sitemap-node absolute cursor-pointer rounded-lg border-2 bg-card shadow-sm overflow-hidden ${
+        isError
+          ? "border-red-500 ring-2 ring-red-500/20"
+          : selected
+          ? "border-primary ring-2 ring-primary/20"
+          : "border-border/60 hover:border-primary/40"
+      }`}
+      style={{
+        left: node.x,
+        top: node.y,
+        width: NODE_W,
+        height: NODE_H,
+        contain: "layout paint style",
+      }}
+      onClick={() => onSelect(node)}
+      data-testid={`node-${node.id}`}
+    >
+      <div className="w-full h-[152px] bg-muted/50 relative overflow-hidden">
+        {node.hasScreenshot ? (
+          <img
+            src={screenshotUrl(jobId, node.id)}
+            alt={node.title}
+            className="w-full h-full object-cover object-top"
+            style={{ imageRendering: "auto" }}
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <div className="text-muted-foreground/40">{fileIcon}</div>
+          </div>
+        )}
+        {isError && (
+          <div className="absolute inset-0 bg-red-500/15 flex items-center justify-center">
+            <span className="text-red-600 text-xs font-bold bg-white/80 px-1.5 py-0.5 rounded">
+              {node.statusCode || "ERR"}
+            </span>
+          </div>
+        )}
+        <div
+          className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${
+            node.statusCode >= 200 && node.statusCode < 300
+              ? "bg-green-500"
+              : node.statusCode >= 300 && node.statusCode < 400
+              ? "bg-yellow-500"
+              : "bg-red-500"
+          }`}
+        />
+      </div>
+      <div className="px-2.5 py-2">
+        <p className="text-[11px] font-medium leading-tight truncate" title={node.title}>
+          {node.title || node.path}
+        </p>
+        <p className="text-[10px] text-muted-foreground truncate" title={node.path}>
+          {node.path}
+        </p>
+      </div>
+    </div>
+  );
+}
+const NodeCard = memo(NodeCardImpl);
+
 interface SitemapCanvasProps {
   treeNodes: TreeNode[];
   roots: TreeNode[];
@@ -150,60 +237,88 @@ export function SitemapCanvas({
   onZoomToRect,
 }: SitemapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [panOffset, setPanOffset] = useState({ x: 30, y: 30 });
+  const transformRef = useRef<HTMLDivElement>(null);
+  // Pan offset is held in a ref + applied imperatively so dragging the canvas
+  // doesn't trigger React re-renders of the (expensive) node tree.
+  const panOffsetRef = useRef({ x: 30, y: 30 });
   const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const panStartRef = useRef({ x: 0, y: 0 });
 
-  // Apply center offset from fit-view
+  const applyTransform = useCallback(() => {
+    const el = transformRef.current;
+    if (!el) return;
+    el.style.transform = `translate3d(${panOffsetRef.current.x}px, ${panOffsetRef.current.y}px, 0) scale(${zoom})`;
+  }, [zoom]);
+
+  // Apply center offset from fit-view (imperatively, no re-render)
   useEffect(() => {
     if (centerOffset) {
-      setPanOffset({ x: centerOffset.x, y: centerOffset.y });
+      panOffsetRef.current = { x: centerOffset.x, y: centerOffset.y };
+      applyTransform();
       onCenterOffsetConsumed?.();
     }
-  }, [centerOffset, onCenterOffsetConsumed]);
+  }, [centerOffset, onCenterOffsetConsumed, applyTransform]);
+
+  // Re-apply transform whenever zoom changes
+  useEffect(() => {
+    applyTransform();
+  }, [zoom, applyTransform]);
+
+  const isPanningRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
       if (zoomMode) return; // selection overlay handles zoom-mode drags
       if ((e.target as HTMLElement).closest(".sitemap-node")) return;
+      isPanningRef.current = true;
       setIsPanning(true);
-      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+      panStartRef.current = {
+        x: e.clientX - panOffsetRef.current.x,
+        y: e.clientY - panOffsetRef.current.y,
+      };
     },
-    [panOffset, zoomMode]
+    [zoomMode]
   );
 
-  const rafRef = useRef<number | null>(null);
-  const pendingPanRef = useRef<{ x: number; y: number } | null>(null);
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!isPanning) return;
-      pendingPanRef.current = { x: e.clientX - panStart.x, y: e.clientY - panStart.y };
+      if (!isPanningRef.current) return;
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      panOffsetRef.current = {
+        x: clientX - panStartRef.current.x,
+        y: clientY - panStartRef.current.y,
+      };
       if (rafRef.current != null) return;
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
-        if (pendingPanRef.current) setPanOffset(pendingPanRef.current);
+        applyTransform();
       });
     },
-    [isPanning, panStart]
+    [applyTransform]
   );
 
   const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
+    if (isPanningRef.current) {
+      isPanningRef.current = false;
+      setIsPanning(false);
+    }
   }, []);
 
   // Handler invoked by the selection overlay when user releases the mouse.
   const handleSelectionComplete = useCallback(
     (rectClient: { x: number; y: number; w: number; h: number }) => {
       if (!onZoomToRect) return;
-      // Convert from container-client coords to canvas (pre-transform) coords
-      const canvasX = (rectClient.x - panOffset.x) / zoom;
-      const canvasY = (rectClient.y - panOffset.y) / zoom;
+      const pan = panOffsetRef.current;
+      const canvasX = (rectClient.x - pan.x) / zoom;
+      const canvasY = (rectClient.y - pan.y) / zoom;
       const canvasW = rectClient.w / zoom;
       const canvasH = rectClient.h / zoom;
       onZoomToRect({ x: canvasX, y: canvasY, w: canvasW, h: canvasH });
     },
-    [panOffset, zoom, onZoomToRect]
+    [zoom, onZoomToRect]
   );
 
   const handleWheel = useCallback(
@@ -215,40 +330,30 @@ export function SitemapCanvas({
     [setZoom]
   );
 
-  // Generate connector paths between parent and children
-  const connectors = [];
-  for (const node of treeNodes) {
-    for (const child of node.children) {
-      const x1 = node.x + NODE_W / 2;
-      const y1 = node.y + NODE_H;
-      const x2 = child.x + NODE_W / 2;
-      const y2 = child.y;
-      const midY = y1 + (y2 - y1) / 2;
-      connectors.push(
-        <path
-          key={`${node.id}-${child.id}`}
-          d={`M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`}
-          stroke="hsl(var(--border))"
-          strokeWidth={1.5}
-          fill="none"
-          opacity={0.7}
-        />
-      );
+  // Memoize connector paths — only recompute when the tree itself changes.
+  const connectors = useMemo(() => {
+    const out: JSX.Element[] = [];
+    for (const node of treeNodes) {
+      for (const child of node.children) {
+        const x1 = node.x + NODE_W / 2;
+        const y1 = node.y + NODE_H;
+        const x2 = child.x + NODE_W / 2;
+        const y2 = child.y;
+        const midY = y1 + (y2 - y1) / 2;
+        out.push(
+          <path
+            key={`${node.id}-${child.id}`}
+            d={`M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`}
+            stroke="hsl(var(--border))"
+            strokeWidth={1.5}
+            fill="none"
+            opacity={0.7}
+          />
+        );
+      }
     }
-  }
-
-  const getFileIcon = (fileType: string) => {
-    switch (fileType) {
-      case "html":
-        return <Globe className="w-3 h-3" />;
-      case "pdf":
-        return <FileText className="w-3 h-3" />;
-      case "image":
-        return <FileImage className="w-3 h-3" />;
-      default:
-        return <File className="w-3 h-3" />;
-    }
-  };
+    return out;
+  }, [treeNodes]);
 
   return (
     <div
@@ -263,12 +368,14 @@ export function SitemapCanvas({
       data-testid="sitemap-canvas"
     >
       <div
+        ref={transformRef}
         style={{
-          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+          transform: `translate3d(${panOffsetRef.current.x}px, ${panOffsetRef.current.y}px, 0) scale(${zoom})`,
           transformOrigin: "0 0",
           width: layoutWidth + 60,
           height: layoutHeight + 60,
           position: "relative",
+          willChange: isPanning ? "transform" : "auto",
         }}
       >
         {/* SVG layer for connectors */}
@@ -280,72 +387,15 @@ export function SitemapCanvas({
           {connectors}
         </svg>
 
-        {/* Node cards */}
+        {/* Node cards (memoized so pan/zoom doesn't re-render them) */}
         {treeNodes.map((node) => (
-          <div
+          <NodeCard
             key={node.id}
-            className={`sitemap-node absolute cursor-pointer rounded-lg border-2 bg-card shadow-sm overflow-hidden ${
-              node.statusCode >= 400 || node.statusCode === 0
-                ? "border-red-500 ring-2 ring-red-500/20"
-                : selectedNodeId === node.id
-                ? "border-primary ring-2 ring-primary/20"
-                : "border-border/60 hover:border-primary/40"
-            }`}
-            style={{
-              left: node.x,
-              top: node.y,
-              width: NODE_W,
-              height: NODE_H,
-            }}
-            onClick={() => onSelectNode(node)}
-            data-testid={`node-${node.id}`}
-          >
-            {/* Screenshot thumbnail */}
-            <div className="w-full h-[152px] bg-muted/50 relative overflow-hidden">
-              {node.hasScreenshot ? (
-                <img
-                  src={screenshotUrl(jobId, node.id)}
-                  alt={node.title}
-                  className="w-full h-full object-cover object-top"
-                  style={{ imageRendering: "auto" }}
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-muted-foreground/40">
-                    {getFileIcon(node.fileType)}
-                  </div>
-                </div>
-              )}
-              {/* Red overlay for error pages */}
-              {(node.statusCode >= 400 || node.statusCode === 0) && (
-                <div className="absolute inset-0 bg-red-500/15 flex items-center justify-center">
-                  <span className="text-red-600 text-xs font-bold bg-white/80 px-1.5 py-0.5 rounded">
-                    {node.statusCode || "ERR"}
-                  </span>
-                </div>
-              )}
-              {/* Status badge */}
-              <div
-                className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${
-                  node.statusCode >= 200 && node.statusCode < 300
-                    ? "bg-green-500"
-                    : node.statusCode >= 300 && node.statusCode < 400
-                    ? "bg-yellow-500"
-                    : "bg-red-500"
-                }`}
-              />
-            </div>
-            {/* Label */}
-            <div className="px-2.5 py-2">
-              <p className="text-[11px] font-medium leading-tight truncate" title={node.title}>
-                {node.title || node.path}
-              </p>
-              <p className="text-[10px] text-muted-foreground truncate" title={node.path}>
-                {node.path}
-              </p>
-            </div>
-          </div>
+            node={node}
+            jobId={jobId}
+            selected={selectedNodeId === node.id}
+            onSelect={onSelectNode}
+          />
         ))}
       </div>
 
