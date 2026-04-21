@@ -58,8 +58,9 @@ export function SitemapCanvas({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
-      if ((e.target as HTMLElement).closest(".sitemap-node")) return;
       if (zoomMode) {
+        // In zoom mode, always start a selection (even if over a node card)
+        e.preventDefault();
         const rect = containerRef.current?.getBoundingClientRect();
         if (!rect) return;
         const x = e.clientX - rect.left;
@@ -68,27 +69,41 @@ export function SitemapCanvas({
         setSelectCurrent({ x, y });
         return;
       }
+      if ((e.target as HTMLElement).closest(".sitemap-node")) return;
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
     },
     [panOffset, zoomMode]
   );
 
+  const rafRef = useRef<number | null>(null);
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (zoomMode && selectStart) {
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        setSelectCurrent({
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
+        const clientX = e.clientX;
+        const clientY = e.clientY;
+        if (rafRef.current) return;
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (!rect) return;
+          setSelectCurrent({
+            x: clientX - rect.left,
+            y: clientY - rect.top,
+          });
         });
         return;
       }
       if (!isPanning) return;
-      setPanOffset({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y,
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        setPanOffset({
+          x: clientX - panStart.x,
+          y: clientY - panStart.y,
+        });
       });
     },
     [isPanning, panStart, zoomMode, selectStart]
@@ -205,7 +220,9 @@ export function SitemapCanvas({
         {treeNodes.map((node) => (
           <div
             key={node.id}
-            className={`sitemap-node absolute cursor-pointer rounded-lg border-2 bg-card shadow-sm overflow-hidden ${
+            className={`sitemap-node absolute rounded-lg border-2 bg-card shadow-sm overflow-hidden ${
+              zoomMode ? "pointer-events-none" : "cursor-pointer"
+            } ${
               node.statusCode >= 400 || node.statusCode === 0
                 ? "border-red-500 ring-2 ring-red-500/20"
                 : selectedNodeId === node.id
@@ -218,7 +235,7 @@ export function SitemapCanvas({
               width: NODE_W,
               height: NODE_H,
             }}
-            onClick={() => onSelectNode(node)}
+            onClick={() => !zoomMode && onSelectNode(node)}
             data-testid={`node-${node.id}`}
           >
             {/* Screenshot thumbnail */}
