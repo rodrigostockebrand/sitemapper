@@ -6,7 +6,7 @@ const SCREENSHOT_WIDTH = 1280;
 const SCREENSHOT_HEIGHT = 800;
 const DEVICE_SCALE_FACTOR = 2;
 const NAV_TIMEOUT = 15000;
-const PAGE_TIMEOUT = 30000; // Hard per-page timeout — kill and move on
+const PAGE_TIMEOUT = 35000; // Hard per-page timeout — kill and move on
 const CONCURRENT_SCREENSHOTS = 4;
 const MAX_RETRIES = 1; // Keep retries low to avoid compounding hangs
 
@@ -135,19 +135,25 @@ export async function takeScreenshots(
               // Cookie setting is best-effort
             }
 
-            // Navigate — use domcontentloaded as primary, it's faster and
-            // won't hang on sites with persistent connections
+            // Navigate — try networkidle2 first (waits for most resources),
+            // fall back gracefully on timeout
             try {
               await page.goto(pageNode.url, {
-                waitUntil: "domcontentloaded",
+                waitUntil: "networkidle2",
                 timeout: NAV_TIMEOUT,
               });
             } catch {
-              // Timeout is ok — DOM likely loaded, just has slow sub-resources
+              // Timeout is ok — page likely rendered, just has lingering requests
             }
 
-            // Brief wait for JS to hydrate and render visible content
-            await new Promise((r) => setTimeout(r, 1200));
+            // Wait for content to actually render — SPAs need time after
+            // network settles to hydrate and paint visible content
+            try {
+              await page.waitForSelector("img, h1, main, article, [class*=hero], [class*=content]", { timeout: 3000 });
+            } catch {
+              // No matching selector found — page may still have content
+            }
+            await new Promise((r) => setTimeout(r, 800));
 
             // Layer 1: Try to click common accept/dismiss buttons
             try {
@@ -286,6 +292,32 @@ export async function takeScreenshots(
               // Best-effort
             }
 
+            // Check if the page has meaningful visible content before screenshotting
+            const hasContent = await page.evaluate(() => {
+              const body = document.body;
+              if (!body) return false;
+              // Check if any images are loaded and visible
+              const imgs = body.querySelectorAll("img");
+              for (const img of imgs) {
+                const rect = (img as HTMLElement).getBoundingClientRect();
+                if (rect.width > 50 && rect.height > 50 && rect.top < window.innerHeight) return true;
+              }
+              // Check if there's substantial text content in the viewport
+              const textLen = body.innerText?.trim().length || 0;
+              if (textLen > 200) return true;
+              // Check for canvas, video, or SVG content
+              if (body.querySelector("canvas, video, svg")) return true;
+              return false;
+            }).catch(() => true); // Default to true if eval fails
+
+            // If no content detected and we haven't retried, wait longer and retry
+            if (!hasContent && attempt < MAX_RETRIES) {
+              await page.close().catch(() => {});
+              page = undefined;
+              await new Promise((r) => setTimeout(r, 2000));
+              return captureOne(pageNode, attempt + 1);
+            }
+
             const screenshotBuffer = await page.screenshot({
               type: "webp",
               quality: 85,
@@ -293,14 +325,6 @@ export async function takeScreenshots(
             });
 
             const b64 = screenshotBuffer as string;
-
-            // Check if screenshot is blank — retry once if so
-            if (b64.length < 5000 && attempt < MAX_RETRIES) {
-              await page.close().catch(() => {});
-              page = undefined;
-              await new Promise((r) => setTimeout(r, 1000));
-              return captureOne(pageNode, attempt + 1);
-            }
 
             pageNode.screenshotBase64 = b64;
           })(),
