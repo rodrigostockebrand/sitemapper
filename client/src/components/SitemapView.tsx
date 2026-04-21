@@ -325,9 +325,33 @@ export function SitemapView({ job }: SitemapViewProps) {
       }
       setIsExporting(true);
       try {
+        // Pre-load every screenshot image in the canvas so off-screen (lazy)
+        // images are fully fetched before we rasterize the DOM to a picture.
+        toast({
+          title: "Preparing export…",
+          description: "Loading all screenshots. This may take a few seconds.",
+        });
+        const imgs = Array.from(canvas.querySelectorAll("img")) as HTMLImageElement[];
+        await Promise.all(
+          imgs.map((img) => {
+            // Force eager loading for this export pass
+            img.loading = "eager";
+            if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+            return new Promise<void>((resolve) => {
+              const done = () => resolve();
+              img.addEventListener("load", done, { once: true });
+              img.addEventListener("error", done, { once: true });
+              // Safety timeout per-image so a single slow image doesn't stall export
+              setTimeout(done, 8000);
+            });
+          })
+        );
+        // Give the browser a frame to paint freshly-loaded images
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+
         const options = {
           pixelRatio: 2,
-          cacheBust: true,
+          cacheBust: false, // images are already loaded; cache-busting would refetch them
           backgroundColor: "#ffffff",
           // Skip the selection-overlay UI so the export looks clean.
           filter: (node: HTMLElement) => {

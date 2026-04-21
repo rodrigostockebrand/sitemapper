@@ -169,6 +169,7 @@ function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
             style={{ imageRendering: "auto" }}
             loading="lazy"
             decoding="async"
+            crossOrigin="anonymous"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

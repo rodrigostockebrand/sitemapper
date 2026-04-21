@@ -393,6 +393,9 @@ export async function registerRoutes(
     }
     res.setHeader("Content-Type", "image/webp");
     res.setHeader("Cache-Control", "public, max-age=3600");
+    // CORS headers so client-side image export (html-to-image) can read pixels
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     res.send(buffer);
   });
 
