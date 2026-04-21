@@ -19,6 +19,8 @@ interface SitemapCanvasProps {
   selectedNodeId: string | null;
   centerOffset?: { x: number; y: number } | null;
   onCenterOffsetConsumed?: () => void;
+  zoomMode?: boolean;
+  onZoomToRect?: (rect: { x: number; y: number; w: number; h: number }) => void;
 }
 
 export function SitemapCanvas({
@@ -33,11 +35,17 @@ export function SitemapCanvas({
   selectedNodeId,
   centerOffset,
   onCenterOffsetConsumed,
+  zoomMode = false,
+  onZoomToRect,
 }: SitemapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [panOffset, setPanOffset] = useState({ x: 30, y: 30 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // Zoom-to-area selection state (in container/client coordinates)
+  const [selectStart, setSelectStart] = useState<{ x: number; y: number } | null>(null);
+  const [selectCurrent, setSelectCurrent] = useState<{ x: number; y: number } | null>(null);
 
   // Apply center offset from fit-view
   useEffect(() => {
@@ -51,26 +59,63 @@ export function SitemapCanvas({
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
       if ((e.target as HTMLElement).closest(".sitemap-node")) return;
+      if (zoomMode) {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        setSelectStart({ x, y });
+        setSelectCurrent({ x, y });
+        return;
+      }
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
     },
-    [panOffset]
+    [panOffset, zoomMode]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      if (zoomMode && selectStart) {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        setSelectCurrent({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+        return;
+      }
       if (!isPanning) return;
       setPanOffset({
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y,
       });
     },
-    [isPanning, panStart]
+    [isPanning, panStart, zoomMode, selectStart]
   );
 
   const handleMouseUp = useCallback(() => {
+    if (zoomMode && selectStart && selectCurrent) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      const minX = Math.min(selectStart.x, selectCurrent.x);
+      const minY = Math.min(selectStart.y, selectCurrent.y);
+      const w = Math.abs(selectCurrent.x - selectStart.x);
+      const h = Math.abs(selectCurrent.y - selectStart.y);
+      // Only trigger zoom if selection is large enough (avoid accidental clicks)
+      if (w > 12 && h > 12 && rect && onZoomToRect) {
+        // Convert from container coords to canvas coords
+        const canvasX = (minX - panOffset.x) / zoom;
+        const canvasY = (minY - panOffset.y) / zoom;
+        const canvasW = w / zoom;
+        const canvasH = h / zoom;
+        onZoomToRect({ x: canvasX, y: canvasY, w: canvasW, h: canvasH });
+      }
+      setSelectStart(null);
+      setSelectCurrent(null);
+      return;
+    }
     setIsPanning(false);
-  }, []);
+  }, [zoomMode, selectStart, selectCurrent, panOffset, zoom, onZoomToRect]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -116,10 +161,21 @@ export function SitemapCanvas({
     }
   };
 
+  // Compute selection rectangle in container coords for rendering
+  const selectionRect =
+    zoomMode && selectStart && selectCurrent
+      ? {
+          left: Math.min(selectStart.x, selectCurrent.x),
+          top: Math.min(selectStart.y, selectCurrent.y),
+          width: Math.abs(selectCurrent.x - selectStart.x),
+          height: Math.abs(selectCurrent.y - selectStart.y),
+        }
+      : null;
+
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-hidden sitemap-canvas bg-muted/20"
+      className={`flex-1 overflow-hidden sitemap-canvas bg-muted/20 relative ${zoomMode ? "cursor-crosshair" : ""}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -213,6 +269,27 @@ export function SitemapCanvas({
           </div>
         ))}
       </div>
+
+      {/* Zoom-to-area selection rectangle overlay */}
+      {selectionRect && (
+        <div
+          className="pointer-events-none absolute border-2 border-primary bg-primary/10"
+          style={{
+            left: selectionRect.left,
+            top: selectionRect.top,
+            width: selectionRect.width,
+            height: selectionRect.height,
+          }}
+          data-testid="zoom-selection-rect"
+        />
+      )}
+
+      {/* Hint when zoom mode is active */}
+      {zoomMode && !selectionRect && (
+        <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-foreground/90 text-background text-xs px-3 py-1.5 rounded-full shadow-lg">
+          Draw a box to zoom in
+        </div>
+      )}
     </div>
   );
 }

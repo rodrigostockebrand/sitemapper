@@ -15,7 +15,12 @@ import {
   ZoomOut,
   Maximize2,
   Minimize2,
+  ScanSearch,
+  X,
+  Sparkles,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SitemapViewProps {
   job: CrawlJob;
@@ -183,12 +188,19 @@ function layoutTree(
 }
 
 export function SitemapView({ job }: SitemapViewProps) {
+  const { user } = useAuth();
+  const isPro = user?.tier === "pro";
+
   const [selectedNode, setSelectedNode] = useState<PageNode | null>(null);
   const [zoom, setZoom] = useState(0.5);
   const [viewMode, setViewMode] = useState<"tree" | "list">("tree");
   const [centerOffset, setCenterOffset] = useState<{ x: number; y: number } | null>(null);
 
   const [spacing, setSpacing] = useState(0.3);
+
+  // Zoom-to-area state
+  const [zoomMode, setZoomMode] = useState(false);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
 
   const { treeNodes, layoutWidth, layoutHeight, roots } = useMemo(() => {
     const roots = buildTree(job.pages);
@@ -217,7 +229,32 @@ export function SitemapView({ job }: SitemapViewProps) {
     const cx = Math.max(0, (containerWidth - scaledW) / 2);
     const cy = Math.max(0, (containerHeight - scaledH) / 2);
     setCenterOffset({ x: cx, y: cy });
+    setIsZoomedIn(false);
   }, [layoutWidth, layoutHeight, selectedNode]);
+
+  const handleZoomToRect = useCallback(
+    (rect: { x: number; y: number; w: number; h: number }) => {
+      const containerWidth = window.innerWidth - (selectedNode ? 400 : 0);
+      const containerHeight = window.innerHeight - 140;
+      // Compute zoom needed to fit the selected rect into the viewport
+      const padding = 40; // px of breathing room around the zoomed area
+      const scaleX = (containerWidth - padding * 2) / Math.max(rect.w, 1);
+      const scaleY = (containerHeight - padding * 2) / Math.max(rect.h, 1);
+      const newZoom = Math.min(Math.max(Math.min(scaleX, scaleY), 0.1), 3);
+      setZoom(newZoom);
+      // Center the rect within the viewport
+      const cx = (containerWidth - rect.w * newZoom) / 2 - rect.x * newZoom;
+      const cy = (containerHeight - rect.h * newZoom) / 2 - rect.y * newZoom;
+      setCenterOffset({ x: cx, y: cy });
+      setZoomMode(false);
+      setIsZoomedIn(true);
+    },
+    [selectedNode]
+  );
+
+  const handleExitZoom = useCallback(() => {
+    handleFitView();
+  }, [handleFitView]);
 
   const handleExportSVG = useCallback(() => {
     let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${layoutWidth + 60}" height="${layoutHeight + 60}" viewBox="0 0 ${layoutWidth + 60} ${layoutHeight + 60}">`;
@@ -290,6 +327,48 @@ export function SitemapView({ job }: SitemapViewProps) {
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleFitView} data-testid="button-fit">
             <Maximize2 className="w-4 h-4" />
           </Button>
+
+          {/* Zoom-to-area (Pro) */}
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={zoomMode ? "default" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => isPro && setZoomMode((v) => !v)}
+                  disabled={!isPro}
+                  data-testid="button-zoom-to-area"
+                >
+                  <ScanSearch className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {isPro ? (
+                  zoomMode ? "Cancel zoom-to-area" : "Zoom to area — draw a box"
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> Pro feature: zoom to area
+                  </span>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Exit zoom — shown when user is zoomed into a selection */}
+          {isZoomedIn && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={handleExitZoom}
+              data-testid="button-exit-zoom"
+            >
+              <X className="w-3.5 h-3.5" />
+              Exit zoom
+            </Button>
+          )}
+
           <div className="w-px h-5 bg-border mx-1" />
           <div className="flex items-center gap-1.5 mr-1" title="Map density">
             <Minimize2 className="w-3 h-3 text-muted-foreground" />
@@ -321,12 +400,18 @@ export function SitemapView({ job }: SitemapViewProps) {
             layoutWidth={layoutWidth}
             layoutHeight={layoutHeight}
             zoom={zoom}
-            setZoom={setZoom}
+            setZoom={(fn) => {
+              setZoom(fn);
+              // Manual zoom invalidates "zoomed-in" state so the X button disappears
+              setIsZoomedIn(false);
+            }}
             jobId={job.id}
             onSelectNode={setSelectedNode}
             selectedNodeId={selectedNode?.id || null}
             centerOffset={centerOffset}
             onCenterOffsetConsumed={() => setCenterOffset(null)}
+            zoomMode={zoomMode}
+            onZoomToRect={handleZoomToRect}
           />
         ) : (
           <PageListView
