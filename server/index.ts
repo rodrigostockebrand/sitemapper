@@ -22,6 +22,52 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// CORS — env-driven allowlist. If CORS_ORIGINS is empty (the live backend's
+// default), this is a no-op and behavior is unchanged. The DeepDiscovery-
+// dedicated duplicate backend sets CORS_ORIGINS to allow embedded use.
+const corsOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+if (corsOrigins.length > 0) {
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      const allowed = corsOrigins.some((pattern) => {
+        if (pattern === origin) return true;
+        if (pattern.startsWith("*.")) {
+          const suffix = pattern.slice(2); // "example.com"
+          try {
+            const host = new URL(origin).host;
+            return host === suffix || host.endsWith("." + suffix);
+          } catch {
+            return false;
+          }
+        }
+        return false;
+      });
+      if (allowed) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+        res.setHeader(
+          "Access-Control-Allow-Methods",
+          "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+        );
+        res.setHeader(
+          "Access-Control-Allow-Headers",
+          "Content-Type,Authorization,X-Requested-With",
+        );
+        if (req.method === "OPTIONS") {
+          return res.status(204).end();
+        }
+      }
+    }
+    next();
+  });
+}
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
