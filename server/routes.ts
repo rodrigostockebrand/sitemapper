@@ -455,6 +455,7 @@ export async function registerRoutes(
         customer: customerId,
         mode: "subscription",
         line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+        allow_promotion_codes: true,
         success_url: `${APP_URL}/#/upgrade-success`,
         cancel_url: `${APP_URL}/#/pricing`,
         subscription_data: {
