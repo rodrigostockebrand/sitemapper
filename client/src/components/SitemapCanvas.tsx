@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, memo } from "react";
 import type { TreeNode } from "@/components/SitemapView";
 import type { PageNode } from "@shared/schema";
 import { screenshotUrl } from "@/lib/api";
@@ -6,6 +6,117 @@ import { FileText, FileImage, File, Globe } from "lucide-react";
 
 const NODE_W = 240;
 const NODE_H = 200;
+
+/**
+ * Isolated overlay for drawing a zoom-selection rectangle.
+ * Keeps its drag state local so dragging does NOT re-render the
+ * (expensive) node grid above.
+ */
+function ZoomSelectionOverlayImpl({
+  containerRef,
+  onComplete,
+}: {
+  containerRef: React.RefObject<HTMLDivElement>;
+  onComplete: (rectClient: { x: number; y: number; w: number; h: number }) => void;
+}) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const rectRef = useRef<HTMLDivElement>(null);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef<{ x: number; y: number } | null>(null);
+
+  const getLocal = useCallback(
+    (clientX: number, clientY: number) => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return { x: 0, y: 0 };
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    },
+    [containerRef]
+  );
+
+  const drawRect = useCallback(() => {
+    rafRef.current = null;
+    const el = rectRef.current;
+    const start = startRef.current;
+    const cur = pendingRef.current;
+    if (!el || !start || !cur) return;
+    const left = Math.min(start.x, cur.x);
+    const top = Math.min(start.y, cur.y);
+    const width = Math.abs(cur.x - start.x);
+    const height = Math.abs(cur.y - start.y);
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.width = `${width}px`;
+    el.style.height = `${height}px`;
+    el.style.display = width > 0 || height > 0 ? "block" : "none";
+  }, []);
+
+  const handleDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const p = getLocal(e.clientX, e.clientY);
+      startRef.current = p;
+      pendingRef.current = p;
+      drawRect();
+    },
+    [drawRect, getLocal]
+  );
+
+  const handleMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!startRef.current) return;
+      pendingRef.current = getLocal(e.clientX, e.clientY);
+      if (rafRef.current == null) {
+        rafRef.current = requestAnimationFrame(drawRect);
+      }
+    },
+    [drawRect, getLocal]
+  );
+
+  const finish = useCallback(() => {
+    const start = startRef.current;
+    const cur = pendingRef.current;
+    startRef.current = null;
+    pendingRef.current = null;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (rectRef.current) rectRef.current.style.display = "none";
+    if (start && cur) {
+      const x = Math.min(start.x, cur.x);
+      const y = Math.min(start.y, cur.y);
+      const w = Math.abs(cur.x - start.x);
+      const h = Math.abs(cur.y - start.y);
+      if (w > 12 && h > 12) onComplete({ x, y, w, h });
+    }
+  }, [onComplete]);
+
+  return (
+    <div
+      ref={overlayRef}
+      className="absolute inset-0 z-20"
+      style={{ cursor: "crosshair" }}
+      onMouseDown={handleDown}
+      onMouseMove={handleMove}
+      onMouseUp={finish}
+      onMouseLeave={finish}
+      data-testid="zoom-selection-overlay"
+    >
+      <div
+        ref={rectRef}
+        className="absolute border-2 border-primary bg-primary/10 pointer-events-none"
+        style={{ display: "none", left: 0, top: 0, width: 0, height: 0 }}
+        data-testid="zoom-selection-rect"
+      />
+      <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-foreground/90 text-background text-xs px-3 py-1.5 rounded-full shadow-lg">
+        Drag to draw a box — release to zoom
+      </div>
+    </div>
+  );
+}
+const ZoomSelectionOverlay = memo(ZoomSelectionOverlayImpl);
 
 interface SitemapCanvasProps {
   treeNodes: TreeNode[];
@@ -43,10 +154,6 @@ export function SitemapCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
-  // Zoom-to-area selection state (in container/client coordinates)
-  const [selectStart, setSelectStart] = useState<{ x: number; y: number } | null>(null);
-  const [selectCurrent, setSelectCurrent] = useState<{ x: number; y: number } | null>(null);
-
   // Apply center offset from fit-view
   useEffect(() => {
     if (centerOffset) {
@@ -58,17 +165,7 @@ export function SitemapCanvas({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (e.button !== 0) return;
-      if (zoomMode) {
-        // In zoom mode, always start a selection (even if over a node card)
-        e.preventDefault();
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        setSelectStart({ x, y });
-        setSelectCurrent({ x, y });
-        return;
-      }
+      if (zoomMode) return; // selection overlay handles zoom-mode drags
       if ((e.target as HTMLElement).closest(".sitemap-node")) return;
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
@@ -77,60 +174,37 @@ export function SitemapCanvas({
   );
 
   const rafRef = useRef<number | null>(null);
+  const pendingPanRef = useRef<{ x: number; y: number } | null>(null);
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (zoomMode && selectStart) {
-        const clientX = e.clientX;
-        const clientY = e.clientY;
-        if (rafRef.current) return;
-        rafRef.current = requestAnimationFrame(() => {
-          rafRef.current = null;
-          const rect = containerRef.current?.getBoundingClientRect();
-          if (!rect) return;
-          setSelectCurrent({
-            x: clientX - rect.left,
-            y: clientY - rect.top,
-          });
-        });
-        return;
-      }
       if (!isPanning) return;
-      const clientX = e.clientX;
-      const clientY = e.clientY;
-      if (rafRef.current) return;
+      pendingPanRef.current = { x: e.clientX - panStart.x, y: e.clientY - panStart.y };
+      if (rafRef.current != null) return;
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
-        setPanOffset({
-          x: clientX - panStart.x,
-          y: clientY - panStart.y,
-        });
+        if (pendingPanRef.current) setPanOffset(pendingPanRef.current);
       });
     },
-    [isPanning, panStart, zoomMode, selectStart]
+    [isPanning, panStart]
   );
 
   const handleMouseUp = useCallback(() => {
-    if (zoomMode && selectStart && selectCurrent) {
-      const rect = containerRef.current?.getBoundingClientRect();
-      const minX = Math.min(selectStart.x, selectCurrent.x);
-      const minY = Math.min(selectStart.y, selectCurrent.y);
-      const w = Math.abs(selectCurrent.x - selectStart.x);
-      const h = Math.abs(selectCurrent.y - selectStart.y);
-      // Only trigger zoom if selection is large enough (avoid accidental clicks)
-      if (w > 12 && h > 12 && rect && onZoomToRect) {
-        // Convert from container coords to canvas coords
-        const canvasX = (minX - panOffset.x) / zoom;
-        const canvasY = (minY - panOffset.y) / zoom;
-        const canvasW = w / zoom;
-        const canvasH = h / zoom;
-        onZoomToRect({ x: canvasX, y: canvasY, w: canvasW, h: canvasH });
-      }
-      setSelectStart(null);
-      setSelectCurrent(null);
-      return;
-    }
     setIsPanning(false);
-  }, [zoomMode, selectStart, selectCurrent, panOffset, zoom, onZoomToRect]);
+  }, []);
+
+  // Handler invoked by the selection overlay when user releases the mouse.
+  const handleSelectionComplete = useCallback(
+    (rectClient: { x: number; y: number; w: number; h: number }) => {
+      if (!onZoomToRect) return;
+      // Convert from container-client coords to canvas (pre-transform) coords
+      const canvasX = (rectClient.x - panOffset.x) / zoom;
+      const canvasY = (rectClient.y - panOffset.y) / zoom;
+      const canvasW = rectClient.w / zoom;
+      const canvasH = rectClient.h / zoom;
+      onZoomToRect({ x: canvasX, y: canvasY, w: canvasW, h: canvasH });
+    },
+    [panOffset, zoom, onZoomToRect]
+  );
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -176,21 +250,11 @@ export function SitemapCanvas({
     }
   };
 
-  // Compute selection rectangle in container coords for rendering
-  const selectionRect =
-    zoomMode && selectStart && selectCurrent
-      ? {
-          left: Math.min(selectStart.x, selectCurrent.x),
-          top: Math.min(selectStart.y, selectCurrent.y),
-          width: Math.abs(selectCurrent.x - selectStart.x),
-          height: Math.abs(selectCurrent.y - selectStart.y),
-        }
-      : null;
-
   return (
     <div
       ref={containerRef}
-      className={`flex-1 overflow-hidden sitemap-canvas bg-muted/20 relative ${zoomMode ? "cursor-crosshair" : ""}`}
+      className="flex-1 overflow-hidden sitemap-canvas bg-muted/20 relative"
+      style={zoomMode ? { cursor: "crosshair" } : undefined}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -220,9 +284,7 @@ export function SitemapCanvas({
         {treeNodes.map((node) => (
           <div
             key={node.id}
-            className={`sitemap-node absolute rounded-lg border-2 bg-card shadow-sm overflow-hidden ${
-              zoomMode ? "pointer-events-none" : "cursor-pointer"
-            } ${
+            className={`sitemap-node absolute cursor-pointer rounded-lg border-2 bg-card shadow-sm overflow-hidden ${
               node.statusCode >= 400 || node.statusCode === 0
                 ? "border-red-500 ring-2 ring-red-500/20"
                 : selectedNodeId === node.id
@@ -235,7 +297,7 @@ export function SitemapCanvas({
               width: NODE_W,
               height: NODE_H,
             }}
-            onClick={() => !zoomMode && onSelectNode(node)}
+            onClick={() => onSelectNode(node)}
             data-testid={`node-${node.id}`}
           >
             {/* Screenshot thumbnail */}
@@ -287,25 +349,12 @@ export function SitemapCanvas({
         ))}
       </div>
 
-      {/* Zoom-to-area selection rectangle overlay */}
-      {selectionRect && (
-        <div
-          className="pointer-events-none absolute border-2 border-primary bg-primary/10"
-          style={{
-            left: selectionRect.left,
-            top: selectionRect.top,
-            width: selectionRect.width,
-            height: selectionRect.height,
-          }}
-          data-testid="zoom-selection-rect"
+      {/* Zoom-to-area overlay — isolated so dragging doesn't re-render the canvas */}
+      {zoomMode && (
+        <ZoomSelectionOverlay
+          containerRef={containerRef}
+          onComplete={handleSelectionComplete}
         />
-      )}
-
-      {/* Hint when zoom mode is active */}
-      {zoomMode && !selectionRect && (
-        <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-foreground/90 text-background text-xs px-3 py-1.5 rounded-full shadow-lg">
-          Draw a box to zoom in
-        </div>
       )}
     </div>
   );
