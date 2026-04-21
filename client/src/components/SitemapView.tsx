@@ -21,6 +21,16 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toPng, toJpeg } from "html-to-image";
+import { useToast } from "@/hooks/use-toast";
 
 interface SitemapViewProps {
   job: CrawlJob;
@@ -190,6 +200,8 @@ function layoutTree(
 export function SitemapView({ job }: SitemapViewProps) {
   const { user } = useAuth();
   const isPro = user?.tier === "pro";
+  const { toast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
 
   const [selectedNode, setSelectedNode] = useState<PageNode | null>(null);
   const [zoom, setZoom] = useState(0.5);
@@ -291,6 +303,65 @@ export function SitemapView({ job }: SitemapViewProps) {
     URL.revokeObjectURL(url);
   }, [treeNodes, layoutWidth, layoutHeight, job.domain]);
 
+  /**
+   * Export the CURRENT visible canvas view as PNG or JPG (Pro only).
+   * Captures exactly what the user sees — including any zoom-to-area state.
+   */
+  const handleExportImage = useCallback(
+    async (format: "png" | "jpg") => {
+      if (!isPro) {
+        toast({
+          title: "Pro feature",
+          description: "PNG and JPG exports are available on the Pro plan.",
+        });
+        return;
+      }
+      const canvas = document.querySelector(
+        '[data-testid="sitemap-canvas"]'
+      ) as HTMLElement | null;
+      if (!canvas) {
+        toast({ title: "Export failed", description: "Canvas not found." });
+        return;
+      }
+      setIsExporting(true);
+      try {
+        const options = {
+          pixelRatio: 2,
+          cacheBust: true,
+          backgroundColor: "#ffffff",
+          // Skip the selection-overlay UI so the export looks clean.
+          filter: (node: HTMLElement) => {
+            if (!(node instanceof HTMLElement)) return true;
+            const testId = node.getAttribute?.("data-testid");
+            return testId !== "zoom-selection-overlay";
+          },
+        };
+        const dataUrl =
+          format === "png"
+            ? await toPng(canvas, options)
+            : await toJpeg(canvas, { ...options, quality: 0.95 });
+        const a = document.createElement("a");
+        const suffix = isZoomedIn ? "-zoomed" : "";
+        a.href = dataUrl;
+        a.download = `sitemap-${job.domain}${suffix}.${format}`;
+        a.click();
+        toast({
+          title: "Export ready",
+          description: `Saved ${isZoomedIn ? "zoomed view" : "full view"} as ${format.toUpperCase()}.`,
+        });
+      } catch (err) {
+        console.error("Image export failed", err);
+        toast({
+          title: "Export failed",
+          description: "Could not generate image. Try again.",
+        });
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [isPro, toast, job.domain, isZoomedIn]
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
       {/* Toolbar */}
@@ -384,10 +455,62 @@ export function SitemapView({ job }: SitemapViewProps) {
             <Maximize2 className="w-3 h-3 text-muted-foreground" />
           </div>
           <div className="w-px h-5 bg-border mx-1" />
-          <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={handleExportSVG} data-testid="button-export">
-            <Download className="w-3.5 h-3.5" />
-            Export SVG
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                disabled={isExporting}
+                data-testid="button-export"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {isExporting ? "Exporting…" : "Export"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-xs">
+                {isZoomedIn ? "Export zoomed view" : "Export full map"}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportSVG} data-testid="export-svg">
+                <Download className="w-3.5 h-3.5 mr-2" />
+                SVG (vector)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!isPro}
+                onClick={() => handleExportImage("png")}
+                data-testid="export-png"
+                className="flex items-center justify-between"
+              >
+                <span className="flex items-center">
+                  <Download className="w-3.5 h-3.5 mr-2" />
+                  PNG (current view)
+                </span>
+                {!isPro && <Sparkles className="w-3 h-3 text-muted-foreground" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!isPro}
+                onClick={() => handleExportImage("jpg")}
+                data-testid="export-jpg"
+                className="flex items-center justify-between"
+              >
+                <span className="flex items-center">
+                  <Download className="w-3.5 h-3.5 mr-2" />
+                  JPG (current view)
+                </span>
+                {!isPro && <Sparkles className="w-3 h-3 text-muted-foreground" />}
+              </DropdownMenuItem>
+              {!isPro && (
+                <>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                    PNG & JPG exports are a Pro feature.
+                  </div>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
