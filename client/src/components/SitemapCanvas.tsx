@@ -169,7 +169,6 @@ function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
             style={{ imageRendering: "auto" }}
             loading="lazy"
             decoding="async"
-            crossOrigin="anonymous"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -220,9 +219,11 @@ interface SitemapCanvasProps {
   onCenterOffsetConsumed?: () => void;
   zoomMode?: boolean;
   onZoomToRect?: (rect: { x: number; y: number; w: number; h: number }) => void;
+  /** When true, bypass viewport culling and render every node (used for PNG/JPG export). */
+  renderAllNodes?: boolean;
 }
 
-export function SitemapCanvas({
+function SitemapCanvasImpl({
   treeNodes,
   roots,
   layoutWidth,
@@ -236,6 +237,7 @@ export function SitemapCanvas({
   onCenterOffsetConsumed,
   zoomMode = false,
   onZoomToRect,
+  renderAllNodes = false,
 }: SitemapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<HTMLDivElement>(null);
@@ -245,17 +247,37 @@ export function SitemapCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
 
+  // Viewport culling state — only render cards visible on screen.
+  // Tick increments whenever pan/zoom changes enough to warrant a recompute.
+  const [viewportTick, setViewportTick] = useState(0);
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+
   const applyTransform = useCallback(() => {
     const el = transformRef.current;
     if (!el) return;
     el.style.transform = `translate3d(${panOffsetRef.current.x}px, ${panOffsetRef.current.y}px, 0) scale(${zoom})`;
   }, [zoom]);
 
+  // Measure the container for viewport culling
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setContainerSize({ w: r.width, h: r.height });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Apply center offset from fit-view (imperatively, no re-render)
   useEffect(() => {
     if (centerOffset) {
       panOffsetRef.current = { x: centerOffset.x, y: centerOffset.y };
       applyTransform();
+      setViewportTick((t) => t + 1); // trigger re-cull after fit-view
       onCenterOffsetConsumed?.();
     }
   }, [centerOffset, onCenterOffsetConsumed, applyTransform]);
@@ -263,6 +285,7 @@ export function SitemapCanvas({
   // Re-apply transform whenever zoom changes
   useEffect(() => {
     applyTransform();
+    setViewportTick((t) => t + 1); // re-cull on zoom change
   }, [zoom, applyTransform]);
 
   const isPanningRef = useRef(false);
@@ -305,6 +328,8 @@ export function SitemapCanvas({
     if (isPanningRef.current) {
       isPanningRef.current = false;
       setIsPanning(false);
+      // Re-cull visible cards after a pan ends
+      setViewportTick((t) => t + 1);
     }
   }, []);
 
@@ -332,6 +357,7 @@ export function SitemapCanvas({
   );
 
   // Memoize connector paths — only recompute when the tree itself changes.
+  // (Connectors are cheap SVG paths; drawing all of them is fine.)
   const connectors = useMemo(() => {
     const out: JSX.Element[] = [];
     for (const node of treeNodes) {
@@ -355,6 +381,55 @@ export function SitemapCanvas({
     }
     return out;
   }, [treeNodes]);
+
+  /**
+   * Viewport culling — compute which cards are visible (or near-visible) in
+   * the current viewport. Cards outside this window are NOT mounted, which
+   * dramatically reduces DOM size + image fetches for large sitemaps.
+   */
+  const visibleNodes = useMemo(() => {
+    // Export mode: render every card so the output is complete.
+    if (renderAllNodes) return treeNodes;
+    // If we haven't measured yet, render a reasonable initial subset so the
+    // user sees something immediately rather than an empty canvas.
+    if (containerSize.w === 0 || containerSize.h === 0) {
+      return treeNodes.slice(0, 200);
+    }
+    const pan = panOffsetRef.current;
+    // Visible window in canvas (pre-transform) coordinates:
+    // screenX = panX + canvasX * zoom  =>  canvasX = (screenX - panX) / zoom
+    const bufferPx = 800; // generous buffer so panning rarely pops cards in/out
+    const minX = (0 - pan.x) / zoom - bufferPx;
+    const maxX = (containerSize.w - pan.x) / zoom + bufferPx;
+    const minY = (0 - pan.y) / zoom - bufferPx;
+    const maxY = (containerSize.h - pan.y) / zoom + bufferPx;
+    const out: TreeNode[] = [];
+    for (const node of treeNodes) {
+      if (
+        node.x + NODE_W >= minX &&
+        node.x <= maxX &&
+        node.y + NODE_H >= minY &&
+        node.y <= maxY
+      ) {
+        out.push(node);
+      }
+    }
+    // Safety cap: never render more than ~400 cards at once, even if the
+    // viewport is enormous and fully zoomed out. Prefer the cards closest to
+    // viewport center so the user always sees something.
+    if (out.length > 400) {
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      out.sort((a, b) => {
+        const da = (a.x - cx) ** 2 + (a.y - cy) ** 2;
+        const db = (b.x - cx) ** 2 + (b.y - cy) ** 2;
+        return da - db;
+      });
+      return out.slice(0, 400);
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treeNodes, zoom, containerSize.w, containerSize.h, viewportTick, renderAllNodes]);
 
   return (
     <div
@@ -388,8 +463,8 @@ export function SitemapCanvas({
           {connectors}
         </svg>
 
-        {/* Node cards (memoized so pan/zoom doesn't re-render them) */}
-        {treeNodes.map((node) => (
+        {/* Node cards — viewport-culled + memoized for large sitemaps */}
+        {visibleNodes.map((node) => (
           <NodeCard
             key={node.id}
             node={node}
@@ -410,3 +485,4 @@ export function SitemapCanvas({
     </div>
   );
 }
+export const SitemapCanvas = memo(SitemapCanvasImpl);

@@ -202,6 +202,9 @@ export function SitemapView({ job }: SitemapViewProps) {
   const isPro = user?.tier === "pro";
   const { toast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
+  // Force full (uncull) render on the canvas while exporting, so PNG/JPG
+  // include off-screen cards. Toggled on just before html-to-image runs.
+  const [renderAllForExport, setRenderAllForExport] = useState(false);
 
   const [selectedNode, setSelectedNode] = useState<PageNode | null>(null);
   const [zoom, setZoom] = useState(0.5);
@@ -324,6 +327,12 @@ export function SitemapView({ job }: SitemapViewProps) {
         return;
       }
       setIsExporting(true);
+      // Force the canvas to render every card (bypass viewport culling) so
+      // off-screen nodes appear in the export.
+      setRenderAllForExport(true);
+      // Wait 2 frames for React to commit the expanded node tree to the DOM.
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
       try {
         // Pre-load every screenshot image in the canvas so off-screen (lazy)
         // images are fully fetched before we rasterize the DOM to a picture.
@@ -381,6 +390,7 @@ export function SitemapView({ job }: SitemapViewProps) {
         });
       } finally {
         setIsExporting(false);
+        setRenderAllForExport(false);
       }
     },
     [isPro, toast, job.domain, isZoomedIn]
@@ -549,7 +559,6 @@ export function SitemapView({ job }: SitemapViewProps) {
             zoom={zoom}
             setZoom={(fn) => {
               setZoom(fn);
-              // Manual zoom invalidates "zoomed-in" state so the X button disappears
               setIsZoomedIn(false);
             }}
             jobId={job.id}
@@ -559,6 +568,7 @@ export function SitemapView({ job }: SitemapViewProps) {
             onCenterOffsetConsumed={() => setCenterOffset(null)}
             zoomMode={zoomMode}
             onZoomToRect={handleZoomToRect}
+            renderAllNodes={renderAllForExport}
           />
         ) : (
           <PageListView
