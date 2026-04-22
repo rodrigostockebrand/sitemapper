@@ -141,8 +141,15 @@ interface NodeCardProps {
   jobId: string;
   selected: boolean;
   onSelect: (node: PageNode) => void;
+  /**
+   * When false, the card still renders (border, text, status dot, file icon)
+   * but the <img> tag is omitted. This avoids firing 1000 image requests
+   * when the map is zoomed out — each card is too small on-screen to see
+   * the image anyway. Flips back to true as the user zooms in.
+   */
+  showImage: boolean;
 }
-function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
+function NodeCardImpl({ node, jobId, selected, onSelect, showImage }: NodeCardProps) {
   const isError = node.statusCode >= 400 || node.statusCode === 0;
   const fileIcon =
     node.fileType === "html" ? (
@@ -174,7 +181,7 @@ function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
       data-testid={`node-${node.id}`}
     >
       <div className="w-full h-[152px] bg-muted/50 relative overflow-hidden">
-        {node.hasScreenshot ? (
+        {showImage && node.hasScreenshot ? (
           <img
             src={screenshotUrl(jobId, node.id, true)}
             alt={node.title}
@@ -376,6 +383,20 @@ function SitemapCanvasImpl({
     [setZoom]
   );
 
+  /**
+   * Image threshold. When the on-screen width of a card (NODE_W * zoom) is
+   * below this, we stop rendering the <img> tag inside each card. The card
+   * still shows its border, status dot, title and path — it just doesn't
+   * ask the browser to fetch/decode a screenshot that'd be too small to see.
+   * This is what keeps the app snappy when the user fits 1000 pages on
+   * screen, while keeping the map legible and complete.
+   *
+   * Export mode (`renderAllNodes=true`) always shows images so the exported
+   * image/PNG is fully populated.
+   */
+  const IMAGE_MIN_ON_SCREEN_PX = 96;
+  const showImages = renderAllNodes || NODE_W * zoom >= IMAGE_MIN_ON_SCREEN_PX;
+
   // Memoize connector paths — only recompute when the tree itself changes.
   // (Connectors are cheap SVG paths; drawing all of them is fine.)
   const connectors = useMemo(() => {
@@ -436,19 +457,9 @@ function SitemapCanvasImpl({
         out.push(node);
       }
     }
-    // Safety cap: never render more than ~400 cards at once, even if the
-    // viewport is enormous and fully zoomed out. Prefer the cards closest to
-    // viewport center so the user always sees something.
-    if (out.length > 400) {
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-      out.sort((a, b) => {
-        const da = (a.x - cx) ** 2 + (a.y - cy) ** 2;
-        const db = (b.x - cx) ** 2 + (b.y - cy) ** 2;
-        return da - db;
-      });
-      return out.slice(0, 400);
-    }
+    // No upper cap: `content-visibility: auto` on each card means mounting
+    // all in-viewport nodes (even 1000+) is cheap. Capping silently drops
+    // pages from the user's map, which is worse than any perf cost.
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treeNodes, zoom, containerSize.w, containerSize.h, viewportTick, renderAllNodes]);
@@ -485,7 +496,9 @@ function SitemapCanvasImpl({
           {connectors}
         </svg>
 
-        {/* Node cards — viewport-culled + memoized for large sitemaps */}
+        {/* Node cards — viewport-culled + memoized for large sitemaps.
+            `showImage` flips off when zoomed out so we don't fire 1000
+            image requests for cards that would be ~40px on screen. */}
         {visibleNodes.map((node) => (
           <NodeCard
             key={node.id}
@@ -493,6 +506,7 @@ function SitemapCanvasImpl({
             jobId={jobId}
             selected={selectedNodeId === node.id}
             onSelect={onSelectNode}
+            showImage={showImages}
           />
         ))}
       </div>
