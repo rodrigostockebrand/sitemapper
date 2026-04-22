@@ -70,6 +70,7 @@ export interface PageNode {
   childIds: string[];
   screenshotPath: string | null;
   screenshotBase64: string | null;
+  thumbnailBase64?: string | null;
   hasScreenshot?: boolean;
   fileType: "html" | "pdf" | "image" | "other";
   metaDescription: string | null;

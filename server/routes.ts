@@ -385,14 +385,19 @@ export async function registerRoutes(
     res.json({ ...job, pages: lightPages });
   });
 
-  // Get a single page screenshot
+  // Get a single page screenshot. Pass ?thumb=1 for the small (~480×304)
+  // variant used by the sitemap card grid.
   app.get("/api/crawl/:id/page/:pageId/screenshot", (req, res) => {
-    const buffer = storage.getScreenshot(req.params.id, req.params.pageId);
+    const wantThumb = req.query.thumb === "1" || req.query.thumb === "true";
+    const buffer = wantThumb
+      ? storage.getThumbnail(req.params.id, req.params.pageId)
+      : storage.getScreenshot(req.params.id, req.params.pageId);
     if (!buffer) {
       return res.status(404).json({ error: "Screenshot not found" });
     }
     res.setHeader("Content-Type", "image/webp");
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    // Immutable per-crawl content — safe to cache aggressively in the browser.
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
     // CORS headers so client-side image export (html-to-image) can read pixels
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");

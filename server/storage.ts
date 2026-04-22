@@ -74,12 +74,23 @@ function screenshotPath(jobId: string, pageId: string): string {
   return join(jobDir, `${pageId}.jpg`);
 }
 
+function thumbnailPath(jobId: string, pageId: string): string {
+  const jobDir = join(SCREENSHOTS_DIR, jobId);
+  mkdirSync(jobDir, { recursive: true });
+  return join(jobDir, `${pageId}_thumb.webp`);
+}
+
 function saveScreenshotsToDisk(jobId: string, pages: PageNode[]): PageNode[] {
   return pages.map((p) => {
-    if (p.screenshotBase64) {
+    if (p.screenshotBase64 || p.thumbnailBase64) {
       const path = screenshotPath(jobId, p.id);
-      writeFileSync(path, Buffer.from(p.screenshotBase64, "base64"));
-      return { ...p, screenshotBase64: null, screenshotPath: path };
+      if (p.screenshotBase64) {
+        writeFileSync(path, Buffer.from(p.screenshotBase64, "base64"));
+      }
+      if (p.thumbnailBase64) {
+        writeFileSync(thumbnailPath(jobId, p.id), Buffer.from(p.thumbnailBase64, "base64"));
+      }
+      return { ...p, screenshotBase64: null, thumbnailBase64: null, screenshotPath: path };
     }
     return p;
   });
@@ -91,6 +102,12 @@ function hasScreenshotOnDisk(jobId: string, pageId: string): boolean {
 
 function readScreenshotFromDisk(jobId: string, pageId: string): Buffer | null {
   const path = screenshotPath(jobId, pageId);
+  if (!existsSync(path)) return null;
+  return readFileSync(path);
+}
+
+function readThumbnailFromDisk(jobId: string, pageId: string): Buffer | null {
+  const path = thumbnailPath(jobId, pageId);
   if (!existsSync(path)) return null;
   return readFileSync(path);
 }
@@ -158,6 +175,7 @@ export interface IStorage {
   updateCrawlJob(id: string, update: Partial<CrawlJob>): CrawlJob | undefined;
   deleteCrawlJob(id: string): boolean;
   getScreenshot(jobId: string, pageId: string): Buffer | null;
+  getThumbnail(jobId: string, pageId: string): Buffer | null;
   hasScreenshot(jobId: string, pageId: string): boolean;
 }
 
@@ -375,6 +393,11 @@ export class SqliteStorage implements IStorage {
 
   getScreenshot(jobId: string, pageId: string): Buffer | null {
     return readScreenshotFromDisk(jobId, pageId);
+  }
+
+  getThumbnail(jobId: string, pageId: string): Buffer | null {
+    // Fall back to the full screenshot if no thumbnail exists (legacy crawls)
+    return readThumbnailFromDisk(jobId, pageId) || readScreenshotFromDisk(jobId, pageId);
   }
 
   hasScreenshot(jobId: string, pageId: string): boolean {

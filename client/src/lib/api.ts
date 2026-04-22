@@ -6,6 +6,7 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
-export function screenshotUrl(jobId: string, pageId: string): string {
-  return apiUrl(`/api/crawl/${jobId}/page/${pageId}/screenshot`);
+export function screenshotUrl(jobId: string, pageId: string, thumb = false): string {
+  const base = apiUrl(`/api/crawl/${jobId}/page/${pageId}/screenshot`);
+  return thumb ? `${base}?thumb=1` : base;
 }

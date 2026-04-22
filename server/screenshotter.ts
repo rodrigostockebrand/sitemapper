@@ -1,10 +1,17 @@
 import puppeteer from "puppeteer-core";
+import sharp from "sharp";
 import type { PageNode } from "@shared/schema";
 
 const CHROME_PATH = process.env.CHROME_PATH || "/usr/bin/chromium-browser";
 const SCREENSHOT_WIDTH = 1280;
 const SCREENSHOT_HEIGHT = 800;
-const DEVICE_SCALE_FACTOR = 2;
+// DPR=1 keeps images at ~1280×800 (was 2560×1600) — ~4× smaller on disk and
+// way faster over the wire. Cards only need ~240×152 anyway.
+const DEVICE_SCALE_FACTOR = 1;
+// Thumb dimensions for card display. Cards are 240×152, so 480×304 at 2×
+// pixel ratio is plenty sharp on retina without being huge.
+const THUMB_WIDTH = 480;
+const THUMB_HEIGHT = 304;
 const NAV_TIMEOUT = 15000;
 const PAGE_TIMEOUT = 35000; // Hard per-page timeout — kill and move on
 const CONCURRENT_SCREENSHOTS = 4;
@@ -318,15 +325,31 @@ export async function takeScreenshots(
               return captureOne(pageNode, attempt + 1);
             }
 
-            const screenshotBuffer = await page.screenshot({
+            // Take full-resolution screenshot as a raw buffer so we can pipe
+            // it through sharp without base64 overhead.
+            const fullBuffer = (await page.screenshot({
               type: "webp",
-              quality: 85,
-              encoding: "base64",
-            });
+              quality: 80,
+            })) as Buffer;
 
-            const b64 = screenshotBuffer as string;
+            // Derive a small thumbnail for the sitemap card grid. Much smaller
+            // payload than the full-res image → faster load, less memory.
+            let thumbBuffer: Buffer;
+            try {
+              thumbBuffer = await sharp(fullBuffer)
+                .resize(THUMB_WIDTH, THUMB_HEIGHT, {
+                  fit: "cover",
+                  position: "top",
+                })
+                .webp({ quality: 72 })
+                .toBuffer();
+            } catch {
+              // If resize fails for any reason, fall back to the full image
+              thumbBuffer = fullBuffer;
+            }
 
-            pageNode.screenshotBase64 = b64;
+            pageNode.screenshotBase64 = fullBuffer.toString("base64");
+            pageNode.thumbnailBase64 = thumbBuffer.toString("base64");
           })(),
           PAGE_TIMEOUT,
           `screenshot ${pageNode.url}`

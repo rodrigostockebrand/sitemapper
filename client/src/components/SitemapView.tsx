@@ -621,7 +621,7 @@ function PageListView({
             <div className="w-20 h-14 rounded bg-muted flex-shrink-0 overflow-hidden">
               {page.hasScreenshot ? (
                 <img
-                  src={screenshotUrl(jobId, page.id)}
+                  src={screenshotUrl(jobId, page.id, true)}
                   alt=""
                   className="w-full h-full object-cover object-top"
                 />

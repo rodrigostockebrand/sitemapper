@@ -96,8 +96,8 @@ function ZoomSelectionOverlayImpl({
   return (
     <div
       ref={overlayRef}
-      className="absolute inset-0 z-20"
-      style={{ cursor: "crosshair" }}
+      className="absolute inset-0"
+      style={{ cursor: "crosshair", zIndex: 50 }}
       onMouseDown={handleDown}
       onMouseMove={handleMove}
       onMouseUp={finish}
@@ -106,11 +106,21 @@ function ZoomSelectionOverlayImpl({
     >
       <div
         ref={rectRef}
-        className="absolute border-2 border-primary bg-primary/10 pointer-events-none"
-        style={{ display: "none", left: 0, top: 0, width: 0, height: 0 }}
+        className="absolute pointer-events-none"
+        style={{
+          display: "none",
+          left: 0,
+          top: 0,
+          width: 0,
+          height: 0,
+          border: "2px solid hsl(var(--primary))",
+          background: "hsl(var(--primary) / 0.18)",
+          boxShadow: "0 0 0 9999px hsl(0 0% 0% / 0.28)",
+          borderRadius: 4,
+        }}
         data-testid="zoom-selection-rect"
       />
-      <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-foreground/90 text-background text-xs px-3 py-1.5 rounded-full shadow-lg">
+      <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 bg-foreground text-background text-xs px-3 py-1.5 rounded-full shadow-lg font-medium">
         Drag to draw a box — release to zoom
       </div>
     </div>
@@ -163,7 +173,7 @@ function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
       <div className="w-full h-[152px] bg-muted/50 relative overflow-hidden">
         {node.hasScreenshot ? (
           <img
-            src={screenshotUrl(jobId, node.id)}
+            src={screenshotUrl(jobId, node.id, true)}
             alt={node.title}
             className="w-full h-full object-cover object-top"
             style={{ imageRendering: "auto" }}
