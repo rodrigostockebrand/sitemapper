@@ -135,15 +135,49 @@ const ZoomSelectionOverlay = memo(ZoomSelectionOverlayImpl);
  * Memoized node card. Only re-renders when its inputs actually change,
  * not when the parent pans/zooms. This is the single biggest perf win
  * for large sitemaps because the card tree contains hundreds of <img> tags.
+ *
+ * Level-of-detail (LOD): when `detail` is "pixel" (low zoom, card < ~60px
+ * on screen) we render a bare colored rectangle — no image, no text, no
+ * inner divs. This is what lets us show ALL 1000 cards at once without
+ * choking the browser.
  */
 interface NodeCardProps {
   node: TreeNode;
   jobId: string;
   selected: boolean;
   onSelect: (node: PageNode) => void;
+  detail: "pixel" | "full";
 }
-function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
+function NodeCardImpl({ node, jobId, selected, onSelect, detail }: NodeCardProps) {
   const isError = node.statusCode >= 400 || node.statusCode === 0;
+
+  // Pixel / low-detail mode — a single colored rect. No <img>, no text.
+  // This is 10-20x cheaper than the full card and is what makes 1000+
+  // node sitemaps feel smooth when zoomed out.
+  if (detail === "pixel") {
+    const bg = isError
+      ? "#ef4444"
+      : node.statusCode >= 300 && node.statusCode < 400
+      ? "#f59e0b"
+      : "#e5e7eb";
+    return (
+      <div
+        className="sitemap-node absolute cursor-pointer rounded-sm"
+        style={{
+          left: node.x,
+          top: node.y,
+          width: NODE_W,
+          height: NODE_H,
+          background: bg,
+          border: selected ? "3px solid #2563eb" : "1px solid #9ca3af",
+          contain: "layout paint style",
+        }}
+        onClick={() => onSelect(node)}
+        data-testid={`node-${node.id}`}
+      />
+    );
+  }
+
   const fileIcon =
     node.fileType === "html" ? (
       <Globe className="w-3 h-3" />
@@ -402,10 +436,20 @@ function SitemapCanvasImpl({
     return out;
   }, [treeNodes]);
 
+  // LOD threshold: when zoom < this, a card is < ~96px wide on screen —
+  // too small to read screenshots or text, so render as pixel rects.
+  // Export mode always uses full detail so the exported image is legible.
+  const DETAIL_THRESHOLD = 0.4;
+  const detail: "pixel" | "full" =
+    renderAllNodes ? "full" : zoom < DETAIL_THRESHOLD ? "pixel" : "full";
+
   /**
    * Viewport culling — compute which cards are visible (or near-visible) in
-   * the current viewport. Cards outside this window are NOT mounted, which
-   * dramatically reduces DOM size + image fetches for large sitemaps.
+   * the current viewport. Cards outside this window are NOT mounted.
+   *
+   * IMPORTANT: there is no upper cap anymore. With LOD rendering, pixel-mode
+   * cards are so cheap that showing all 1000 is fine. The old 400-cap
+   * silently dropped 600 of the user's 1000 pages when zoomed out.
    */
   const visibleNodes = useMemo(() => {
     // Export mode: render every card so the output is complete.
@@ -413,14 +457,14 @@ function SitemapCanvasImpl({
     // If we haven't measured yet, render a reasonable initial subset so the
     // user sees something immediately rather than an empty canvas.
     if (containerSize.w === 0 || containerSize.h === 0) {
-      // Very small safety fallback — should rarely fire now that we seed
-      // containerSize from window dims.
       return treeNodes.slice(0, 30);
     }
     const pan = panOffsetRef.current;
     // Visible window in canvas (pre-transform) coordinates:
     // screenX = panX + canvasX * zoom  =>  canvasX = (screenX - panX) / zoom
-    const bufferPx = 800; // generous buffer so panning rarely pops cards in/out
+    // Use a bigger buffer in pixel mode (cheap to mount anyway) so panning
+    // never pops nodes in/out.
+    const bufferPx = detail === "pixel" ? 2000 : 600;
     const minX = (0 - pan.x) / zoom - bufferPx;
     const maxX = (containerSize.w - pan.x) / zoom + bufferPx;
     const minY = (0 - pan.y) / zoom - bufferPx;
@@ -436,22 +480,9 @@ function SitemapCanvasImpl({
         out.push(node);
       }
     }
-    // Safety cap: never render more than ~400 cards at once, even if the
-    // viewport is enormous and fully zoomed out. Prefer the cards closest to
-    // viewport center so the user always sees something.
-    if (out.length > 400) {
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-      out.sort((a, b) => {
-        const da = (a.x - cx) ** 2 + (a.y - cy) ** 2;
-        const db = (b.x - cx) ** 2 + (b.y - cy) ** 2;
-        return da - db;
-      });
-      return out.slice(0, 400);
-    }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [treeNodes, zoom, containerSize.w, containerSize.h, viewportTick, renderAllNodes]);
+  }, [treeNodes, zoom, containerSize.w, containerSize.h, viewportTick, renderAllNodes, detail]);
 
   return (
     <div
@@ -485,7 +516,7 @@ function SitemapCanvasImpl({
           {connectors}
         </svg>
 
-        {/* Node cards — viewport-culled + memoized for large sitemaps */}
+        {/* Node cards — viewport-culled + LOD + memoized for large sitemaps */}
         {visibleNodes.map((node) => (
           <NodeCard
             key={node.id}
@@ -493,6 +524,7 @@ function SitemapCanvasImpl({
             jobId={jobId}
             selected={selectedNodeId === node.id}
             onSelect={onSelectNode}
+            detail={detail}
           />
         ))}
       </div>
