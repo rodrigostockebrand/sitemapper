@@ -113,10 +113,13 @@ function ZoomSelectionOverlayImpl({
           top: 0,
           width: 0,
           height: 0,
-          border: "2px solid hsl(var(--primary))",
-          background: "hsl(var(--primary) / 0.18)",
-          boxShadow: "0 0 0 9999px hsl(0 0% 0% / 0.28)",
+          // Bright, hard-coded colors so they render regardless of theme
+          // variable resolution. NO box-shadow — a 9999px spread repaints on
+          // every drag frame and kills performance.
+          border: "2px solid #2563eb",
+          background: "rgba(37, 99, 235, 0.18)",
           borderRadius: 4,
+          zIndex: 2,
         }}
         data-testid="zoom-selection-rect"
       />
@@ -260,7 +263,14 @@ function SitemapCanvasImpl({
   // Viewport culling state — only render cards visible on screen.
   // Tick increments whenever pan/zoom changes enough to warrant a recompute.
   const [viewportTick, setViewportTick] = useState(0);
-  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  // Initialise with a sensible guess based on the current window so the first
+  // render can cull correctly — otherwise we render up to 200 cards at (0,0)
+  // before the ResizeObserver fires, which fires off hundreds of image
+  // requests and causes the "screenshots load slowly" feel.
+  const [containerSize, setContainerSize] = useState(() => {
+    if (typeof window === "undefined") return { w: 1280, h: 720 };
+    return { w: window.innerWidth, h: window.innerHeight };
+  });
 
   const applyTransform = useCallback(() => {
     const el = transformRef.current;
@@ -403,7 +413,9 @@ function SitemapCanvasImpl({
     // If we haven't measured yet, render a reasonable initial subset so the
     // user sees something immediately rather than an empty canvas.
     if (containerSize.w === 0 || containerSize.h === 0) {
-      return treeNodes.slice(0, 200);
+      // Very small safety fallback — should rarely fire now that we seed
+      // containerSize from window dims.
+      return treeNodes.slice(0, 30);
     }
     const pan = panOffsetRef.current;
     // Visible window in canvas (pre-transform) coordinates:
