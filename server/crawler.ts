@@ -11,8 +11,11 @@ const FETCH_TIMEOUT = 12000;
 // from sites with aggressive rate-limiting. 4 in-flight requests per origin
 // is well below most WAF thresholds.
 const CONCURRENT_LIMIT = 4;
-// On 429 we retry with backoff up to this many times before giving up
-const MAX_429_RETRIES = 2;
+// On 429 we retry with backoff up to this many times before giving up.
+// Set to 0 because the browser fallback (real Chrome session) is a much
+// better escape hatch from WAF rate-limiters than retrying the same
+// fingerprint after a short delay.
+const MAX_429_RETRIES = 0;
 // Cap the Retry-After we'll honor — anything bigger and we just skip
 const MAX_RETRY_AFTER_MS = 8000;
 // Only use browser fallback for link extraction on pages at depth ≤ 1
@@ -132,8 +135,26 @@ async function fetchPageOnce(url: string): Promise<{
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
   try {
+    // Send browser-like headers — bare {User-Agent} alone is a strong bot
+    // signal for WAFs (Cloudflare, Akamai, Imperva) and often triggers 429.
     const res = await fetch(url, {
-      headers: { "User-Agent": USER_AGENT },
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Accept":
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"macOS"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1",
+      },
       signal: controller.signal,
       redirect: "follow",
     });
@@ -204,20 +225,26 @@ async function fetchPage(url: string): Promise<{
   await waitForGlobalBackoff();
   let lastResult = await fetchPageOnce(url);
 
+  // On 429: bump the global backoff so other concurrent requests pause too.
+  // We do not retry here — the caller will fall back to the headless browser
+  // (real Chrome session) which is a much better escape hatch from WAF rate
+  // limiters than retrying the same bare-fetch fingerprint.
+  if (lastResult.statusCode === 429) {
+    const wait = Math.min(
+      lastResult.retryAfterMs ?? 2000 + Math.floor(Math.random() * 500),
+      MAX_RETRY_AFTER_MS
+    );
+    globalBackoffUntil = Math.max(globalBackoffUntil, Date.now() + wait);
+    console.log(`[crawler] 429 from ${url} — global backoff ${wait}ms, will try browser`);
+  }
+
+  // Optional retry loop kept for future tuning (currently 0 retries)
   for (let attempt = 0; attempt < MAX_429_RETRIES; attempt++) {
     if (lastResult.statusCode !== 429) break;
-
-    // Compute wait: prefer Retry-After, else exponential backoff w/ jitter
-    let wait =
-      lastResult.retryAfterMs != null
-        ? Math.min(lastResult.retryAfterMs, MAX_RETRY_AFTER_MS)
-        : 1000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500);
-    if (wait > MAX_RETRY_AFTER_MS) wait = MAX_RETRY_AFTER_MS;
-
-    // Bump global backoff so other concurrent requests also pause
-    globalBackoffUntil = Math.max(globalBackoffUntil, Date.now() + wait);
-
-    console.log(`[crawler] 429 from ${url} — backing off ${wait}ms (attempt ${attempt + 1})`);
+    const wait = Math.min(
+      lastResult.retryAfterMs ?? 1000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500),
+      MAX_RETRY_AFTER_MS
+    );
     await new Promise((r) => setTimeout(r, wait));
     lastResult = await fetchPageOnce(url);
   }
@@ -473,16 +500,13 @@ export async function crawlSite(
               // Site already known to need browser — skip HTTP entirely
               result = await withTimeout(fetchPageWithBrowser(pool, item.url), 20000);
             } else {
-              // Allow extra time for the 429 retry/backoff path
-              result = await withTimeout(
-                fetchPage(item.url),
-                FETCH_TIMEOUT * (MAX_429_RETRIES + 1) + MAX_RETRY_AFTER_MS * MAX_429_RETRIES + 2000
-              );
+              result = await withTimeout(fetchPage(item.url), FETCH_TIMEOUT + 2000);
 
-              // 429 is a rate-limit signal, not a bot challenge — switching to
-              // a headless browser will just get rate-limited too. Skip browser
-              // fallback for 429 and keep the status code so the user sees it.
-              if (!result.ok && result.statusCode !== 429) {
+              // If HTTP fetch failed (403, 429, challenged, etc.), try browser
+              // fallback. Many WAFs return 429 specifically to bare-fetch
+              // fingerprints — a real Chrome session with cookies and JS often
+              // gets through (different TLS fingerprint, real navigator, etc.).
+              if (!result.ok) {
                 console.log(`[crawler] HTTP failed (${result.statusCode}) for ${item.url}, trying browser...`);
                 result = await withTimeout(fetchPageWithBrowser(pool, item.url), 20000);
 
