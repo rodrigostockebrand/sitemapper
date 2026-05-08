@@ -7,6 +7,7 @@ import { storage, safeUser } from "./storage";
 import {
   crawlRequestSchema,
   registerSchema,
+  betaRegisterSchema,
   loginSchema,
   TIER_LIMITS,
   type CrawlJob,
@@ -131,6 +132,48 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Register error:", err);
       res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  // Beta register — special invite-only flow that creates a Pro account
+  // and bypasses both email verification and Stripe billing entirely.
+  // The expected code is hard-coded for now; rotate by changing this string.
+  const BETA_CODE = "BETAX";
+  app.post("/api/auth/register-beta", async (req, res) => {
+    try {
+      const parsed = betaRegisterSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid input" });
+      }
+      const { email, password, name, code } = parsed.data;
+      if (code.trim().toUpperCase() !== BETA_CODE) {
+        return res.status(403).json({ error: "Invalid beta access code" });
+      }
+      const normalizedEmail = email.toLowerCase().trim();
+      const existing = storage.getUserByEmail(normalizedEmail);
+      if (existing) {
+        return res.status(409).json({ error: "An account with this email already exists" });
+      }
+      const passwordHash = await bcrypt.hash(password, 12);
+      const userId = randomUUID();
+      const user = storage.createUser({
+        id: userId,
+        email: normalizedEmail,
+        name: name.trim(),
+        passwordHash,
+        // Beta accounts skip verification entirely.
+        emailVerified: true,
+        // Granted Pro access without going through Stripe.
+        tier: "pro",
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+        createdAt: new Date().toISOString(),
+      });
+      const jwt = signToken(userId);
+      res.status(201).json({ user: safeUser(user), token: jwt });
+    } catch (err: any) {
+      console.error("Beta register error:", err);
+      res.status(500).json({ error: "Beta registration failed" });
     }
   });
 

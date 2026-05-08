@@ -13,6 +13,7 @@ import DashboardPage from "@/pages/dashboard";
 import PricingPage from "@/pages/pricing";
 import PrivacyPage from "@/pages/privacy";
 import UpgradeSuccessPage from "@/pages/upgrade-success";
+import BetaPage from "@/pages/beta";
 import NotFound from "@/pages/not-found";
 
 function AppRouter() {
@@ -30,6 +31,7 @@ function AppRouter() {
       <Route path="/pricing" component={PricingPage} />
       <Route path="/privacy" component={PrivacyPage} />
       <Route path="/upgrade-success" component={UpgradeSuccessPage} />
+      <Route path="/beta" component={BetaPage} />
       <Route component={NotFound} />
     </Switch>
   );

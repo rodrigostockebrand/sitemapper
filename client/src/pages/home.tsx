@@ -3,7 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { CrawlForm } from "@/components/CrawlForm";
 import { CrawlProgress } from "@/components/CrawlProgress";
 import { SitemapView } from "@/components/SitemapView";
-import { useAuth, getAuthToken } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import type { CrawlJob } from "@shared/schema";
 import {
   Camera,
@@ -13,11 +13,9 @@ import {
   Zap,
   ArrowRight,
   Crown,
-  Check,
-  X,
-  Infinity,
   Mail,
   Shield,
+  Sparkles,
 } from "lucide-react";
 
 /* ── real website screenshot tiles ─────────────────────────── */
@@ -95,19 +93,6 @@ function FeatureCard({
         <p className="text-xs text-gray-400 leading-relaxed">{description}</p>
       </div>
     </div>
-  );
-}
-
-function ComparisonRow({ text, included, pro }: { text: string; included?: boolean; pro?: boolean }) {
-  return (
-    <li className="flex items-center gap-2.5 text-sm">
-      {included ? (
-        <Check className={`w-4 h-4 flex-shrink-0 ${pro ? "text-blue-400" : "text-emerald-400"}`} />
-      ) : (
-        <X className="w-4 h-4 flex-shrink-0 text-gray-600" />
-      )}
-      <span className={included ? "text-gray-300" : "text-gray-600 line-through"}>{text}</span>
-    </li>
   );
 }
 
@@ -245,15 +230,6 @@ export default function Home() {
                     Crawl up to {limits?.maxPages ?? 100} pages per site
                   </span>
                 </div>
-                <Link href="/pricing">
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-amber-300 cursor-pointer hover:text-amber-200 transition-colors"
-                    style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.30)" }}
-                  >
-                    <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    Pro: 1,000 pages &amp; unlimited sitemaps
-                  </span>
-                </Link>
               </div>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-white">
                 See your website,{" "}
@@ -310,88 +286,20 @@ export default function Home() {
               />
             </div>
 
-            {/* Pro vs Free comparison section */}
-            <div className="max-w-3xl mx-auto mt-20 mb-8">
-              <div className="text-center mb-10">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4" style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.30)" }}>
-                  <Crown className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-xs font-medium text-amber-300">Unlock the full power</span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">Free vs. Pro</h2>
-                <p className="text-gray-400 text-sm max-w-md mx-auto">The free plan is great for quick audits. Go Pro to map entire websites with no limits.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Free tier card */}
-                <div className="rounded-2xl p-6 flex flex-col" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <h3 className="text-lg font-bold text-white mb-1">Free</h3>
-                  <p className="text-2xl font-bold text-white mb-5">$0 <span className="text-sm font-normal text-gray-500">forever</span></p>
-                  <ul className="space-y-3">
-                    <ComparisonRow text="Up to 100 pages per sitemap" included />
-                    <ComparisonRow text="5 sitemaps per month" included />
-                    <ComparisonRow text="Visual sitemap with screenshots" included />
-                    <ComparisonRow text="Broken link detection" included />
-                    <ComparisonRow text="Subfolder filtering" included />
-                    <ComparisonRow text="Unlimited sitemaps" />
-                    <ComparisonRow text="Up to 1,000 pages per sitemap" />
-                    <ComparisonRow text="Priority crawl speed" />
-                  </ul>
-                  <Link href="/register" className="mt-auto">
-                    <button className="w-full mt-6 py-2.5 rounded-lg text-sm font-medium text-white border border-white/15 hover:bg-white/10 transition-colors cursor-pointer" data-testid="button-free-signup">
-                      Get Started Free
-                    </button>
-                  </Link>
-                </div>
-
-                {/* Pro tier card */}
-                <div className="rounded-2xl p-6 relative overflow-hidden flex flex-col" style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(6,182,212,0.10) 100%)", border: "1px solid rgba(59,130,246,0.25)" }}>
-                  <div className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-1 rounded-full">Most Popular</div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Crown className="w-4 h-4 text-amber-400" />
-                    <h3 className="text-lg font-bold text-white">Pro</h3>
-                  </div>
-                  <p className="text-2xl font-bold text-white mb-5">$49 <span className="text-sm font-normal text-gray-400">/month</span></p>
-                  <ul className="space-y-3">
-                    <ComparisonRow text="Up to 1,000 pages per sitemap" included pro />
-                    <ComparisonRow text="Unlimited sitemaps" included pro />
-                    <ComparisonRow text="Visual sitemap with screenshots" included pro />
-                    <ComparisonRow text="Broken link detection" included pro />
-                    <ComparisonRow text="Subfolder filtering" included pro />
-                    <ComparisonRow text="Priority crawl speed" included pro />
-                    <ComparisonRow text="Export & sharing (coming soon)" included pro />
-                  </ul>
-                  <div className="mt-auto">
-                    <button
-                      onClick={async () => {
-                        if (!user) { window.location.hash = "#/register/pro"; return; }
-                        try {
-                          const res = await fetch(`${"__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__"}/api/billing/checkout`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json", ...(user ? { Authorization: `Bearer ${getAuthToken()}` } : {}) },
-                          });
-                          const data = await res.json();
-                          if (data.url) window.location.href = data.url;
-                          else window.location.hash = "#/pricing";
-                        } catch { window.location.hash = "#/pricing"; }
-                      }}
-                      className="w-full mt-6 py-2.5 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-colors cursor-pointer"
-                      data-testid="button-go-pro"
-                    >
-                      Upgrade to Pro
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom nudge */}
-              <p className="text-center text-xs text-gray-500 mt-6">Cancel anytime. No contracts. Payments via Stripe.</p>
-            </div>
-
             {/* Footer */}
             <footer className="max-w-screen-xl mx-auto px-4 mt-20 pb-8">
               <div className="border-t border-white/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <p className="text-xs text-gray-500">&copy; {new Date().getFullYear()} The Visual Sitemapper. All rights reserved.</p>
                 <div className="flex items-center gap-5">
+                  <Link href="/beta">
+                    <span
+                      className="inline-flex items-center gap-1.5 text-xs text-amber-400/80 hover:text-amber-300 transition-colors cursor-pointer"
+                      data-testid="link-beta-footer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      Beta access
+                    </span>
+                  </Link>
                   <Link href="/privacy">
                     <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors cursor-pointer">
                       <Shield className="w-3 h-3" />
