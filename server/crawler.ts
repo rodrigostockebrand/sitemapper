@@ -7,7 +7,14 @@ const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const CHROME_PATH = process.env.CHROME_PATH || "/usr/bin/chromium-browser";
 const FETCH_TIMEOUT = 12000;
-const CONCURRENT_LIMIT = 8;
+// Lowered from 8 → 4 to be a polite citizen and avoid 429 (Too Many Requests)
+// from sites with aggressive rate-limiting. 4 in-flight requests per origin
+// is well below most WAF thresholds.
+const CONCURRENT_LIMIT = 4;
+// On 429 we retry with backoff up to this many times before giving up
+const MAX_429_RETRIES = 2;
+// Cap the Retry-After we'll honor — anything bigger and we just skip
+const MAX_RETRY_AFTER_MS = 8000;
 // Only use browser fallback for link extraction on pages at depth ≤ 1
 const BROWSER_LINK_MAX_DEPTH = 1;
 const MIN_LINKS_THRESHOLD = 3;
@@ -115,11 +122,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 // ── HTTP fetch (fast path) ──────────────────────────────────────
 
-async function fetchPage(url: string): Promise<{
+async function fetchPageOnce(url: string): Promise<{
   body: string;
   statusCode: number;
   contentType: string;
   ok: boolean;
+  retryAfterMs: number | null;
 }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -134,7 +142,21 @@ async function fetchPage(url: string): Promise<{
     if (contentType.includes("html") || contentType.includes("xhtml")) {
       body = await res.text();
     }
-    const result = { body, statusCode: res.status, contentType, ok: res.ok };
+
+    // Parse Retry-After if present (seconds or HTTP-date)
+    let retryAfterMs: number | null = null;
+    const ra = res.headers.get("retry-after");
+    if (ra) {
+      const secs = parseInt(ra, 10);
+      if (!isNaN(secs)) {
+        retryAfterMs = secs * 1000;
+      } else {
+        const t = Date.parse(ra);
+        if (!isNaN(t)) retryAfterMs = Math.max(0, t - Date.now());
+      }
+    }
+
+    const result = { body, statusCode: res.status, contentType, ok: res.ok, retryAfterMs };
 
     // Detect bot challenge pages
     const isChallenged =
@@ -144,15 +166,64 @@ async function fetchPage(url: string): Promise<{
       /challenge|captcha|verify|blocked|dduser|access denied|please wait/i.test(result.body);
 
     if (!result.ok || isChallenged) {
-      return { body: result.body, statusCode: result.statusCode, contentType, ok: false };
+      return { ...result, ok: false };
     }
-
     return result;
   } catch {
-    return { body: "", statusCode: 0, contentType: "error", ok: false };
+    return { body: "", statusCode: 0, contentType: "error", ok: false, retryAfterMs: null };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Adaptive throttle — when ANY request sees a 429, this timestamp is bumped
+ * forward so all other in-flight requests pause briefly. Slows the whole
+ * crawl down rather than letting each request retry independently.
+ */
+let globalBackoffUntil = 0;
+
+async function waitForGlobalBackoff(): Promise<void> {
+  const now = Date.now();
+  if (globalBackoffUntil > now) {
+    await new Promise((r) => setTimeout(r, globalBackoffUntil - now));
+  }
+}
+
+/**
+ * Fetch with automatic retry on 429 (Too Many Requests). Honors Retry-After up
+ * to MAX_RETRY_AFTER_MS, otherwise uses exponential backoff with jitter. On any
+ * 429, also bumps the global backoff so other in-flight requests pause too.
+ */
+async function fetchPage(url: string): Promise<{
+  body: string;
+  statusCode: number;
+  contentType: string;
+  ok: boolean;
+}> {
+  await waitForGlobalBackoff();
+  let lastResult = await fetchPageOnce(url);
+
+  for (let attempt = 0; attempt < MAX_429_RETRIES; attempt++) {
+    if (lastResult.statusCode !== 429) break;
+
+    // Compute wait: prefer Retry-After, else exponential backoff w/ jitter
+    let wait =
+      lastResult.retryAfterMs != null
+        ? Math.min(lastResult.retryAfterMs, MAX_RETRY_AFTER_MS)
+        : 1000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500);
+    if (wait > MAX_RETRY_AFTER_MS) wait = MAX_RETRY_AFTER_MS;
+
+    // Bump global backoff so other concurrent requests also pause
+    globalBackoffUntil = Math.max(globalBackoffUntil, Date.now() + wait);
+
+    console.log(`[crawler] 429 from ${url} — backing off ${wait}ms (attempt ${attempt + 1})`);
+    await new Promise((r) => setTimeout(r, wait));
+    lastResult = await fetchPageOnce(url);
+  }
+
+  const { body, statusCode, contentType, ok } = lastResult;
+  return { body, statusCode, contentType, ok };
 }
 
 // ── Browser fetch (fallback for bot-protected sites) ────────────
@@ -402,10 +473,16 @@ export async function crawlSite(
               // Site already known to need browser — skip HTTP entirely
               result = await withTimeout(fetchPageWithBrowser(pool, item.url), 20000);
             } else {
-              result = await withTimeout(fetchPage(item.url), FETCH_TIMEOUT + 2000);
+              // Allow extra time for the 429 retry/backoff path
+              result = await withTimeout(
+                fetchPage(item.url),
+                FETCH_TIMEOUT * (MAX_429_RETRIES + 1) + MAX_RETRY_AFTER_MS * MAX_429_RETRIES + 2000
+              );
 
-              // If HTTP fetch failed (403, challenged, etc.), try browser fallback
-              if (!result.ok) {
+              // 429 is a rate-limit signal, not a bot challenge — switching to
+              // a headless browser will just get rate-limited too. Skip browser
+              // fallback for 429 and keep the status code so the user sees it.
+              if (!result.ok && result.statusCode !== 429) {
                 console.log(`[crawler] HTTP failed (${result.statusCode}) for ${item.url}, trying browser...`);
                 result = await withTimeout(fetchPageWithBrowser(pool, item.url), 20000);
 

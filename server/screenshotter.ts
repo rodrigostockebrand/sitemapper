@@ -14,7 +14,10 @@ const THUMB_WIDTH = 480;
 const THUMB_HEIGHT = 304;
 const NAV_TIMEOUT = 15000;
 const PAGE_TIMEOUT = 35000; // Hard per-page timeout — kill and move on
-const CONCURRENT_SCREENSHOTS = 4;
+// Lowered from 4 → 2 to be a polite citizen and avoid 429 (Too Many Requests)
+// from sites with aggressive rate-limiting. Combined with the crawler's
+// CONCURRENT_LIMIT=4, total in-flight requests per origin stays modest.
+const CONCURRENT_SCREENSHOTS = 2;
 const MAX_RETRIES = 1; // Keep retries low to avoid compounding hangs
 
 // Realistic Chrome user agent (non-headless)
