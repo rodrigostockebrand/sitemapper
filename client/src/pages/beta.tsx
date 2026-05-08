@@ -72,8 +72,8 @@ export default function BetaPage() {
       // synced exactly the same as a normal login (including limits).
       await auth.login(email.trim(), password);
       toast({
-        title: "Welcome to Pro \ud83c\udf89",
-        description: "Your beta account is ready. Pro features unlocked.",
+        title: "Welcome to the Beta Club \ud83c\udf89",
+        description: "Your account is ready \u2014 enjoy full access.",
       });
       navigate("/dashboard");
     } catch (err: any) {
@@ -119,15 +119,15 @@ export default function BetaPage() {
               style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.30)" }}
             >
               <Crown className="w-3 h-3 text-blue-300" />
-              <span className="text-[11px] font-semibold text-blue-200">Pro included</span>
+              <span className="text-[11px] font-semibold text-blue-200">Invite only</span>
             </div>
           </div>
 
           {!codeAccepted ? (
             <>
-              <h1 className="text-xl font-bold text-white mb-1">Enter your beta access code</h1>
+              <h1 className="text-xl font-bold text-white mb-1">Join the Beta Club</h1>
               <p className="text-sm text-gray-400 mb-6">
-                Beta users get a free Pro account &mdash; no billing required.
+                Enter your invite code to claim your spot in our private beta &mdash; no billing required.
               </p>
 
               <form onSubmit={handleVerifyCode} className="space-y-4">
@@ -136,7 +136,7 @@ export default function BetaPage() {
                   <Input
                     id="code"
                     type="text"
-                    placeholder="e.g. BETAX"
+                    placeholder=""
                     value={code}
                     onChange={(e) => {
                       setCode(e.target.value);
@@ -166,7 +166,7 @@ export default function BetaPage() {
               </form>
 
               <p className="text-xs text-gray-500 text-center mt-6">
-                Not a beta user?{" "}
+                Don&rsquo;t have an invite?{" "}
                 <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium">
                   Create a free account
                 </Link>
@@ -174,9 +174,9 @@ export default function BetaPage() {
             </>
           ) : (
             <>
-              <h1 className="text-xl font-bold text-white mb-1">Create your Pro account</h1>
+              <h1 className="text-xl font-bold text-white mb-1">Welcome to the Beta Club</h1>
               <p className="text-sm text-gray-400 mb-6">
-                Code accepted. Set up your beta account &mdash; Pro features unlock immediately.
+                Invite verified. Set up your Beta Club account &mdash; you&rsquo;ll get full access from day one.
               </p>
 
               <form onSubmit={handleCreateAccount} className="space-y-4">
@@ -238,8 +238,8 @@ export default function BetaPage() {
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
                   data-testid="button-beta-register"
                 >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Crown className="w-4 h-4 mr-1.5" />}
-                  Create Pro Account
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Sparkles className="w-4 h-4 mr-1.5" />}
+                  Join the Beta Club
                 </Button>
               </form>
 

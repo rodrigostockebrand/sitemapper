@@ -220,17 +220,6 @@ export default function Home() {
           <div className="relative max-w-screen-xl mx-auto px-4 pt-16 pb-10">
             {/* Hero text */}
             <div className="max-w-2xl mx-auto text-center mb-10">
-              <div className="inline-flex items-center gap-2 mb-6">
-                <div
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
-                  style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.30)" }}
-                >
-                  <Zap className="w-3.5 h-3.5 text-blue-500" />
-                  <span className="text-xs font-medium text-blue-300">
-                    Crawl up to {limits?.maxPages ?? 100} pages per site
-                  </span>
-                </div>
-              </div>
               <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 text-white">
                 See your website,{" "}
                 <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
@@ -256,6 +245,28 @@ export default function Home() {
                 }}
               >
                 <CrawlForm onCrawlStarted={handleCrawlStarted} />
+              </div>
+
+              {/* Plan tier pills under the URL entry */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+                <div
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
+                  style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.30)" }}
+                >
+                  <Zap className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-xs font-medium text-blue-300">
+                    Free: crawl up to 100 pages per site
+                  </span>
+                </div>
+                <div
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
+                  style={{ background: "rgba(245,158,11,0.15)", border: "1px solid rgba(245,158,11,0.30)" }}
+                >
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs font-medium text-amber-300">
+                    Pro: crawl up to 1,000 pages per site
+                  </span>
+                </div>
               </div>
             </div>
 
