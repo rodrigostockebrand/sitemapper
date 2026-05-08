@@ -377,7 +377,10 @@ function SitemapCanvasImpl({
   );
 
   // Memoize connector paths — only recompute when the tree itself changes.
-  // (Connectors are cheap SVG paths; drawing all of them is fine.)
+  // Connectors are visually weighted by depth: edges leaving the homepage
+  // (depth 0) are thick + opaque + colored; deeper edges fade and thin out.
+  // This gives the user an at-a-glance read on "how close to the home page
+  // does this branch live?".
   const connectors = useMemo(() => {
     const out: JSX.Element[] = [];
     for (const node of treeNodes) {
@@ -387,14 +390,42 @@ function SitemapCanvasImpl({
         const x2 = child.x + NODE_W / 2;
         const y2 = child.y;
         const midY = y1 + (y2 - y1) / 2;
+
+        // Depth-driven styling. The PARENT's depth determines the edge
+        // weight — so all edges leaving the homepage look like "trunks",
+        // edges leaving depth-1 pages look like "branches", and so on.
+        const d = node.depth;
+        let strokeWidth: number;
+        let stroke: string;
+        let opacity: number;
+        if (d === 0) {
+          // Trunks: edges from the homepage. Thick, primary-colored, opaque.
+          strokeWidth = 4;
+          stroke = "hsl(var(--primary))";
+          opacity = 0.9;
+        } else if (d === 1) {
+          strokeWidth = 2.5;
+          stroke = "hsl(var(--primary) / 0.55)";
+          opacity = 0.85;
+        } else if (d === 2) {
+          strokeWidth = 1.75;
+          stroke = "hsl(var(--border))";
+          opacity = 0.85;
+        } else {
+          strokeWidth = 1.25;
+          stroke = "hsl(var(--border))";
+          opacity = 0.6;
+        }
+
         out.push(
           <path
             key={`${node.id}-${child.id}`}
             d={`M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`}
-            stroke="hsl(var(--border))"
-            strokeWidth={1.5}
+            stroke={stroke}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
             fill="none"
-            opacity={0.7}
+            opacity={opacity}
           />
         );
       }

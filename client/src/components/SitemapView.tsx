@@ -18,6 +18,7 @@ import {
   ScanSearch,
   X,
   Sparkles,
+  Layers,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -81,10 +82,16 @@ const MAX_COLS = 10; // Max children per row before wrapping
  *             overlap slightly but siblings never do).
  * spacing=1 → classic full-subtree-width allocation.
  * Default 0.3 gives a good balance.
+ *
+ * If `hierarchyMode` is true, every node is locked to a Y row determined
+ * by its depth in the tree. This makes the visual hierarchy unambiguous —
+ * no leaf node can ever appear "below" a deeper node just because its
+ * sibling subtree happened to be tall.
  */
 function layoutTree(
   roots: TreeNode[],
   spacing: number = 0.3,
+  hierarchyMode: boolean = false,
 ): { nodes: TreeNode[]; width: number; height: number } {
   // Gap ranges controlled by the slider
   const H_GAP = Math.round(6 + spacing * 30);  // 6..36
@@ -151,7 +158,11 @@ function layoutTree(
   function position(node: TreeNode, x: number, allocatedW: number, y: number) {
     // Centre this node within its allocated strip
     node.x = x + allocatedW / 2 - NODE_W / 2;
-    node.y = y;
+    // In hierarchy mode, force the Y to a row determined purely by depth
+    // so a depth-3 page can never visually appear lower than a depth-4 page.
+    node.y = hierarchyMode
+      ? node.depth * (NODE_H + Math.max(V_GAP, 40))
+      : y;
     allNodes.push(node);
     maxX = Math.max(maxX, node.x + NODE_W);
     maxY = Math.max(maxY, node.y + NODE_H);
@@ -194,6 +205,14 @@ function layoutTree(
     startX += w + H_GAP * 2;
   }
 
+  // In hierarchy mode the recursive Y values aren't used — maxY needs to
+  // reflect the deepest depth-row instead.
+  if (hierarchyMode) {
+    let deepest = 0;
+    for (const n of allNodes) deepest = Math.max(deepest, n.depth);
+    maxY = Math.max(maxY, (deepest + 1) * (NODE_H + Math.max(V_GAP, 40)));
+  }
+
   return { nodes: allNodes, width: maxX + 60, height: maxY + 60 };
 }
 
@@ -212,6 +231,9 @@ export function SitemapView({ job }: SitemapViewProps) {
   const [centerOffset, setCenterOffset] = useState<{ x: number; y: number } | null>(null);
 
   const [spacing, setSpacing] = useState(0.3);
+  // Hierarchy mode: lock node Y to depth so the visual position always
+  // matches the real site hierarchy.
+  const [hierarchyMode, setHierarchyMode] = useState(false);
 
   // Zoom-to-area state
   const [zoomMode, setZoomMode] = useState(false);
@@ -219,9 +241,9 @@ export function SitemapView({ job }: SitemapViewProps) {
 
   const { treeNodes, layoutWidth, layoutHeight, roots } = useMemo(() => {
     const roots = buildTree(job.pages);
-    const { nodes, width, height } = layoutTree(roots, spacing);
+    const { nodes, width, height } = layoutTree(roots, spacing, hierarchyMode);
     return { treeNodes: nodes, layoutWidth: width, layoutHeight: height, roots };
-  }, [job.pages, spacing]);
+  }, [job.pages, spacing, hierarchyMode]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((z) => Math.min(z + 0.15, 2));
@@ -283,7 +305,12 @@ export function SitemapView({ job }: SitemapViewProps) {
         const x2 = child.x + NODE_W / 2 + 30;
         const y2 = child.y + 30;
         const midY = y1 + (y2 - y1) / 2;
-        svg += `<path d="M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}" stroke="#c0c4cc" fill="none" stroke-width="1.5"/>`;
+        // Match canvas styling: depth-driven stroke weight + color.
+        const d = node.depth;
+        const stroke =
+          d === 0 ? "#2563eb" : d === 1 ? "#60a5fa" : "#c0c4cc";
+        const sw = d === 0 ? 4 : d === 1 ? 2.5 : d === 2 ? 1.75 : 1.25;
+        svg += `<path d="M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}" stroke="${stroke}" fill="none" stroke-width="${sw}" stroke-linecap="round"/>`;
       }
     }
 
@@ -456,6 +483,28 @@ export function SitemapView({ job }: SitemapViewProps) {
                     <Sparkles className="w-3 h-3" /> Pro feature: zoom to area
                   </span>
                 )}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Hierarchy mode toggle — lock Y to true site depth */}
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={hierarchyMode ? "default" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setHierarchyMode((v) => !v)}
+                  data-testid="button-hierarchy-mode"
+                >
+                  <Layers className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {hierarchyMode
+                  ? "Exit hierarchy mode (compact layout)"
+                  : "Hierarchy mode — align rows by site depth"}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
