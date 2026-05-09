@@ -67,7 +67,7 @@ function buildTree(pages: PageNode[]): TreeNode[] {
 // Layout constants
 const NODE_W = 240;
 const NODE_H = 200;
-const MAX_COLS = 10; // Max children per row before wrapping
+const MAX_COLS = 10; // Max children per row before wrapping (normal mode only)
 
 /**
  * Compact tree layout that minimises wasted space.
@@ -103,6 +103,12 @@ function layoutTree(
 
   /* ── Measure pass ─────────────────────────────────────── */
 
+  // In hierarchy mode every node at the same depth shares one Y row. If we
+  // wrap children into multiple rows (MAX_COLS), those rows collapse onto
+  // the same Y AND reuse the same X positions — so wrapped children stack
+  // on top of each other and disappear. Disable wrapping in hierarchy mode.
+  const maxCols = hierarchyMode ? Number.POSITIVE_INFINITY : MAX_COLS;
+
   const widthCache = new Map<string, number>();
   function subtreeWidth(node: TreeNode): number {
     if (widthCache.has(node.id)) return widthCache.get(node.id)!;
@@ -110,7 +116,7 @@ function layoutTree(
       widthCache.set(node.id, NODE_W);
       return NODE_W;
     }
-    const cols = Math.min(node.children.length, MAX_COLS);
+    const cols = Math.min(node.children.length, maxCols);
     const rowCount = Math.ceil(node.children.length / cols);
     const colWidths = new Array(cols).fill(NODE_W);
     for (let r = 0; r < rowCount; r++) {
@@ -131,7 +137,7 @@ function layoutTree(
       heightCache.set(node.id, NODE_H);
       return NODE_H;
     }
-    const cols = Math.min(node.children.length, MAX_COLS);
+    const cols = Math.min(node.children.length, maxCols);
     const rowCount = Math.ceil(node.children.length / cols);
     let h = NODE_H + V_GAP;
     for (let r = 0; r < rowCount; r++) {
@@ -169,7 +175,7 @@ function layoutTree(
 
     if (node.children.length === 0) return;
 
-    const cols = Math.min(node.children.length, MAX_COLS);
+    const cols = Math.min(node.children.length, maxCols);
     const rowCount = Math.ceil(node.children.length / cols);
 
     // Compute effective column widths
