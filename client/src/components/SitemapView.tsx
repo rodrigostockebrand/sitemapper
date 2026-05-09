@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { CrawlJob, PageNode } from "@shared/schema";
 import { SitemapCanvas } from "@/components/SitemapCanvas";
 import { PageDetailPanel } from "@/components/PageDetailPanel";
@@ -250,6 +250,21 @@ export function SitemapView({ job }: SitemapViewProps) {
     const { nodes, width, height } = layoutTree(roots, spacing, hierarchyMode);
     return { treeNodes: nodes, layoutWidth: width, layoutHeight: height, roots };
   }, [job.pages, spacing, hierarchyMode]);
+
+  // When hierarchy mode toggles on/off the layout dimensions can change
+  // dramatically (hierarchy disables wrap-at-10, so fan-out parents produce
+  // much wider layouts). Without refitting, the viewport-culling window
+  // stays centered on the old position and most cards appear "missing"
+  // because they're outside the mounted region. Auto-fit on toggle.
+  const firstRenderRef = useRef(true);
+  useEffect(() => {
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      return;
+    }
+    handleFitView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hierarchyMode]);
 
   const handleZoomIn = useCallback(() => {
     setZoom((z) => Math.min(z + 0.15, 2));
