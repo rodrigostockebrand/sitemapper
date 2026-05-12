@@ -163,7 +163,7 @@ export async function takeScreenshots(
             } catch {
               // No matching selector found — page may still have content
             }
-            await new Promise((r) => setTimeout(r, 800));
+            await new Promise((r) => setTimeout(r, 1500));
 
             // Layer 1: Try to click common accept/dismiss buttons
             try {
@@ -286,17 +286,66 @@ export async function takeScreenshots(
               // Best-effort
             }
 
-            // Quick scroll to trigger lazy content
+            // Scroll to trigger lazy-loaded hero images / IntersectionObserver
+            // hydration, then return to top. Stanley / Shopify-style sites
+            // need this or the above-fold hero stays a placeholder.
             try {
               await withTimeout(
                 (async () => {
-                  await page!.evaluate(() => window.scrollTo(0, 300));
-                  await new Promise((r) => setTimeout(r, 400));
+                  await page!.evaluate(() => window.scrollTo(0, 600));
+                  await new Promise((r) => setTimeout(r, 700));
+                  await page!.evaluate(() => window.scrollTo(0, 1200));
+                  await new Promise((r) => setTimeout(r, 500));
                   await page!.evaluate(() => window.scrollTo(0, 0));
-                  await new Promise((r) => setTimeout(r, 200));
+                  await new Promise((r) => setTimeout(r, 800));
                 })(),
-                2000,
+                4000,
                 "scroll"
+              );
+            } catch {
+              // Best-effort
+            }
+
+            // Wait for above-the-fold images to finish loading. Many sites
+            // lazy-load hero images and the screenshot fires before they
+            // resolve, producing a blank/white thumbnail.
+            try {
+              await withTimeout(
+                page.evaluate(
+                  () =>
+                    new Promise<void>((resolve) => {
+                      const imgs = Array.from(
+                        document.querySelectorAll("img")
+                      ).filter((img) => {
+                        const rect = img.getBoundingClientRect();
+                        // Only care about images in the screenshot viewport
+                        return (
+                          rect.top < window.innerHeight &&
+                          rect.bottom > 0 &&
+                          rect.width > 80 &&
+                          rect.height > 80
+                        );
+                      });
+                      if (imgs.length === 0) return resolve();
+                      let remaining = imgs.length;
+                      const done = () => {
+                        remaining--;
+                        if (remaining <= 0) resolve();
+                      };
+                      imgs.forEach((img) => {
+                        if ((img as HTMLImageElement).complete) {
+                          done();
+                        } else {
+                          img.addEventListener("load", done, { once: true });
+                          img.addEventListener("error", done, { once: true });
+                        }
+                      });
+                      // Safety cap — never block longer than 3s here
+                      setTimeout(resolve, 3000);
+                    })
+                ),
+                3500,
+                "image wait"
               );
             } catch {
               // Best-effort
@@ -306,25 +355,40 @@ export async function takeScreenshots(
             const hasContent = await page.evaluate(() => {
               const body = document.body;
               if (!body) return false;
-              // Check if any images are loaded and visible
+              // Check if any images are LOADED (naturalWidth>0) and visible
               const imgs = body.querySelectorAll("img");
               for (const img of imgs) {
-                const rect = (img as HTMLElement).getBoundingClientRect();
-                if (rect.width > 50 && rect.height > 50 && rect.top < window.innerHeight) return true;
+                const el = img as HTMLImageElement;
+                const rect = el.getBoundingClientRect();
+                if (
+                  el.naturalWidth > 0 &&
+                  rect.width > 80 &&
+                  rect.height > 80 &&
+                  rect.top < window.innerHeight
+                ) {
+                  return true;
+                }
               }
-              // Check if there's substantial text content in the viewport
+              // Check if there's substantial text content above the fold
+              // (stricter — 400+ chars, not just any 200 from header/footer)
               const textLen = body.innerText?.trim().length || 0;
-              if (textLen > 200) return true;
-              // Check for canvas, video, or SVG content
-              if (body.querySelector("canvas, video, svg")) return true;
+              if (textLen > 400) return true;
+              // Check for canvas, video, or substantial SVG content
+              const canvas = body.querySelector("canvas, video");
+              if (canvas) return true;
+              const svgs = body.querySelectorAll("svg");
+              for (const svg of svgs) {
+                const rect = (svg as SVGElement).getBoundingClientRect();
+                if (rect.width > 100 && rect.height > 100) return true;
+              }
               return false;
-            }).catch(() => true); // Default to true if eval fails
+            }).catch(() => false); // Default to FALSE on eval failure — force retry
 
             // If no content detected and we haven't retried, wait longer and retry
             if (!hasContent && attempt < MAX_RETRIES) {
               await page.close().catch(() => {});
               page = undefined;
-              await new Promise((r) => setTimeout(r, 2000));
+              await new Promise((r) => setTimeout(r, 2500));
               return captureOne(pageNode, attempt + 1);
             }
 
@@ -334,6 +398,28 @@ export async function takeScreenshots(
               type: "webp",
               quality: 80,
             })) as Buffer;
+
+            // Detect mostly-blank screenshots (all-white / all-one-color). If
+            // the captured image has near-zero variance, the page hadn't
+            // rendered yet — retry with longer waits.
+            try {
+              const stats = await sharp(fullBuffer)
+                .resize(64, 40, { fit: "fill" })
+                .removeAlpha()
+                .stats();
+              // Average stdev across RGB channels — low value means flat image
+              const avgStdev =
+                stats.channels.reduce((s, c) => s + c.stdev, 0) /
+                Math.max(stats.channels.length, 1);
+              if (avgStdev < 6 && attempt < MAX_RETRIES) {
+                await page.close().catch(() => {});
+                page = undefined;
+                await new Promise((r) => setTimeout(r, 2500));
+                return captureOne(pageNode, attempt + 1);
+              }
+            } catch {
+              // sharp stats failed — ship what we have
+            }
 
             // Derive a small thumbnail for the sitemap card grid. Much smaller
             // payload than the full-res image → faster load, less memory.
