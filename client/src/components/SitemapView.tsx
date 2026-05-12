@@ -19,7 +19,16 @@ import {
   X,
   Sparkles,
   Layers,
+  Search,
+  Filter,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -222,6 +231,68 @@ function layoutTree(
   return { nodes: allNodes, width: maxX + 60, height: maxY + 60 };
 }
 
+/* ── Status-code filter buckets ─────────────────────────── */
+
+type StatusBucket = "2xx" | "3xx" | "4xx" | "5xx" | "other";
+const ALL_BUCKETS: StatusBucket[] = ["2xx", "3xx", "4xx", "5xx", "other"];
+
+function bucketOf(status: number): StatusBucket {
+  if (status >= 200 && status < 300) return "2xx";
+  if (status >= 300 && status < 400) return "3xx";
+  if (status >= 400 && status < 500) return "4xx";
+  if (status >= 500 && status < 600) return "5xx";
+  return "other";
+}
+
+const BUCKET_LABELS: Record<StatusBucket, { label: string; color: string }> = {
+  "2xx": { label: "2xx — Success", color: "text-green-600 dark:text-green-400" },
+  "3xx": { label: "3xx — Redirect", color: "text-blue-600 dark:text-blue-400" },
+  "4xx": { label: "4xx — Client error", color: "text-amber-600 dark:text-amber-400" },
+  "5xx": { label: "5xx — Server error", color: "text-red-600 dark:text-red-400" },
+  "other": { label: "Other / no response", color: "text-muted-foreground" },
+};
+
+/**
+ * Filter pages by status bucket + URL substring, but always keep ancestors
+ * of any match so the tree stays connected (no orphan branches). If the
+ * root doesn't match the filter it will still be included whenever it's an
+ * ancestor of something that does.
+ */
+function filterPages(
+  pages: PageNode[],
+  statusFilter: Set<StatusBucket>,
+  urlQuery: string,
+): PageNode[] {
+  const query = urlQuery.trim().toLowerCase();
+  const allActive = statusFilter.size === ALL_BUCKETS.length;
+  if (allActive && !query) return pages;
+
+  const byId = new Map(pages.map((p) => [p.id, p]));
+  const keep = new Set<string>();
+
+  const matches = (p: PageNode) => {
+    if (!statusFilter.has(bucketOf(p.statusCode))) return false;
+    if (query) {
+      const hay = `${p.url} ${p.path}`.toLowerCase();
+      if (!hay.includes(query)) return false;
+    }
+    return true;
+  };
+
+  // Walk up to root for every match, adding ancestors.
+  for (const p of pages) {
+    if (!matches(p)) continue;
+    let cur: PageNode | undefined = p;
+    while (cur) {
+      if (keep.has(cur.id)) break;
+      keep.add(cur.id);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+  }
+
+  return pages.filter((p) => keep.has(p.id));
+}
+
 export function SitemapView({ job }: SitemapViewProps) {
   const { user } = useAuth();
   const isPro = user?.tier === "pro";
@@ -241,22 +312,68 @@ export function SitemapView({ job }: SitemapViewProps) {
   // matches the real site hierarchy.
   const [hierarchyMode, setHierarchyMode] = useState(false);
 
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<Set<StatusBucket>>(
+    () => new Set(ALL_BUCKETS),
+  );
+  const [urlQuery, setUrlQuery] = useState("");
+  const filtersActive =
+    statusFilter.size !== ALL_BUCKETS.length || urlQuery.trim().length > 0;
+
+  const filteredPages = useMemo(
+    () => filterPages(job.pages, statusFilter, urlQuery),
+    [job.pages, statusFilter, urlQuery],
+  );
+
+  // Per-bucket counts for the status dropdown (always from the full set)
+  const bucketCounts = useMemo(() => {
+    const c: Record<StatusBucket, number> = {
+      "2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, other: 0,
+    };
+    for (const p of job.pages) c[bucketOf(p.statusCode)]++;
+    return c;
+  }, [job.pages]);
+
+  const toggleBucket = useCallback((b: StatusBucket) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(b)) next.delete(b);
+      else next.add(b);
+      return next;
+    });
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setStatusFilter(new Set(ALL_BUCKETS));
+    setUrlQuery("");
+  }, []);
+
   // Zoom-to-area state
   const [zoomMode, setZoomMode] = useState(false);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
 
   const { treeNodes, layoutWidth, layoutHeight, roots } = useMemo(() => {
-    const roots = buildTree(job.pages);
+    const roots = buildTree(filteredPages);
     const { nodes, width, height } = layoutTree(roots, spacing, hierarchyMode);
     return { treeNodes: nodes, layoutWidth: width, layoutHeight: height, roots };
-  }, [job.pages, spacing, hierarchyMode]);
+  }, [filteredPages, spacing, hierarchyMode]);
+
+  // Tracks initial render so the auto-fit effects don't fight the first paint
+  const firstRenderRef = useRef(true);
+
+  // Re-fit when filters change so the newly narrowed tree gets a sensible view
+  const filtersKey = `${Array.from(statusFilter).sort().join(",")}|${urlQuery.trim().toLowerCase()}`;
+  useEffect(() => {
+    if (firstRenderRef.current) return;
+    handleFitView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   // When hierarchy mode toggles on/off the layout dimensions can change
   // dramatically (hierarchy disables wrap-at-10, so fan-out parents produce
   // much wider layouts). Without refitting, the viewport-culling window
   // stays centered on the old position and most cards appear "missing"
   // because they're outside the mounted region. Auto-fit on toggle.
-  const firstRenderRef = useRef(true);
   useEffect(() => {
     if (firstRenderRef.current) {
       firstRenderRef.current = false;
@@ -265,6 +382,7 @@ export function SitemapView({ job }: SitemapViewProps) {
     handleFitView();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hierarchyMode]);
+
 
   const handleZoomIn = useCallback(() => {
     setZoom((z) => Math.min(z + 0.15, 2));
@@ -447,9 +565,127 @@ export function SitemapView({ job }: SitemapViewProps) {
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/50">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/50 gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <SitemapStats job={job} />
+
+          <div className="w-px h-5 bg-border" />
+
+          {/* URL search */}
+          <div className="relative flex items-center" style={{ width: 220 }}>
+            <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-2.5 pointer-events-none" />
+            <Input
+              type="text"
+              value={urlQuery}
+              onChange={(e) => setUrlQuery(e.target.value)}
+              placeholder="Filter by URL keyword…"
+              className="h-8 pl-8 pr-7 text-xs"
+              data-testid="input-url-filter"
+            />
+            {urlQuery && (
+              <button
+                type="button"
+                onClick={() => setUrlQuery("")}
+                className="absolute right-1.5 p-1 rounded hover:bg-muted text-muted-foreground"
+                aria-label="Clear URL filter"
+                data-testid="button-clear-url-filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Status-code filter */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={
+                  statusFilter.size !== ALL_BUCKETS.length ? "default" : "outline"
+                }
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                data-testid="button-status-filter"
+              >
+                <Filter className="w-3.5 h-3.5" />
+                Status
+                {statusFilter.size !== ALL_BUCKETS.length && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 px-1 text-[10px] font-mono"
+                  >
+                    {statusFilter.size}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-56 p-2">
+              <div className="text-[11px] font-medium text-muted-foreground px-1 py-1">
+                Show pages with status
+              </div>
+              <div className="space-y-1">
+                {ALL_BUCKETS.map((b) => {
+                  const info = BUCKET_LABELS[b];
+                  const count = bucketCounts[b];
+                  const checked = statusFilter.has(b);
+                  return (
+                    <label
+                      key={b}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
+                      data-testid={`filter-status-${b}`}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={() => toggleBucket(b)}
+                      />
+                      <span className={`text-xs flex-1 ${info.color}`}>
+                        {info.label}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {count}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
+                <button
+                  className="text-[11px] text-muted-foreground hover:text-foreground px-1"
+                  onClick={() => setStatusFilter(new Set(ALL_BUCKETS))}
+                  data-testid="button-status-all"
+                >
+                  Select all
+                </button>
+                <button
+                  className="text-[11px] text-muted-foreground hover:text-foreground px-1"
+                  onClick={() => setStatusFilter(new Set())}
+                  data-testid="button-status-none"
+                >
+                  Clear all
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Filter summary + clear */}
+          {filtersActive && (
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                Showing{" "}
+                <span className="font-semibold text-foreground">
+                  {filteredPages.length}
+                </span>
+                {" of "}
+                {job.pages.length}
+              </span>
+              <button
+                onClick={clearFilters}
+                className="text-[11px] text-primary hover:underline whitespace-nowrap"
+                data-testid="button-clear-filters"
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <div className="flex items-center border border-border rounded-md overflow-hidden mr-2">
@@ -642,7 +878,7 @@ export function SitemapView({ job }: SitemapViewProps) {
           />
         ) : (
           <PageListView
-            pages={job.pages}
+            pages={filteredPages}
             jobId={job.id}
             onSelectNode={setSelectedNode}
             selectedNodeId={selectedNode?.id || null}
