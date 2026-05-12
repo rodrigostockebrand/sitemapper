@@ -522,7 +522,14 @@ export async function registerRoutes(
       res.json({ url: session.url });
     } catch (err: any) {
       console.error("Checkout error:", err.message);
-      res.status(500).json({ error: "Failed to create checkout session" });
+      // Surface Stripe's own message when it's safe — helps the operator diagnose
+      // mis-configured Prices (e.g. trying to charge a recurring Price as one-time).
+      const isStripeErr = err?.type && typeof err.type === "string" && err.type.startsWith("Stripe");
+      res.status(500).json({
+        error: isStripeErr
+          ? `Stripe: ${err.message}`
+          : "Failed to create checkout session",
+      });
     }
   });
 
