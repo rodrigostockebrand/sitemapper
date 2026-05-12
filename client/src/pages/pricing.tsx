@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Check, Crown, Zap, CreditCard } from "lucide-react";
+import { Check, Crown, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -40,8 +40,15 @@ function PlanCard({
       </div>
       <div className="mb-4">
         <span className="text-3xl font-bold text-gray-900">{price}</span>
-        {price !== "Free" && <span className="text-gray-500 text-sm">/month</span>}
+        {price !== "Free" && (
+          <span className="text-gray-500 text-sm"> one-time</span>
+        )}
       </div>
+      {price !== "Free" && (
+        <div className="-mt-3 mb-4 text-[11px] font-medium text-emerald-600">
+          Pay once — lifetime Pro access
+        </div>
+      )}
       <ul className="space-y-2.5 mb-6 flex-1">
         {features.map((f, i) => (
           <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
@@ -96,25 +103,6 @@ export default function PricingPage() {
     }
   }
 
-  async function handleManageBilling() {
-    setLoading(true);
-    try {
-      const res = await apiRequest("POST", "/api/billing/portal");
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error(data.error || "Could not open billing portal");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message || "Failed to open billing portal.",
-        variant: "destructive",
-      });
-      setLoading(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-[#f8f9fc]">
@@ -149,7 +137,7 @@ export default function PricingPage() {
           />
           <PlanCard
             name="Pro"
-            price="$49"
+            price="$29"
             highlighted
             current={user?.tier === "pro"}
             features={[
@@ -157,28 +145,16 @@ export default function PricingPage() {
               "Unlimited sitemaps",
               "Everything in Free",
               "Priority crawl speed",
+              "Lifetime access — no recurring bills",
               "Export & sharing (coming soon)",
             ]}
-            cta={loading ? "Redirecting..." : "Upgrade to Pro"}
+            cta={loading ? "Redirecting..." : "Get Lifetime Pro"}
             onCta={handleUpgrade}
           />
         </div>
 
-        {user?.tier === "pro" && (
-          <div className="text-center mt-8">
-            <button
-              onClick={handleManageBilling}
-              disabled={loading}
-              className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              <CreditCard className="w-4 h-4" />
-              Manage billing &amp; subscription
-            </button>
-          </div>
-        )}
-
         <p className="text-center text-xs text-gray-400 mt-8">
-          Prices in USD. Cancel anytime. Payments processed securely via Stripe.
+          Prices in USD. Pay once, keep Pro forever. Payments processed securely via Stripe.
         </p>
       </main>
     </div>

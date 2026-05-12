@@ -52,12 +52,12 @@ export default function RegisterPage() {
               <Crown className="w-4 h-4 text-amber-500 flex-shrink-0" />
               <div>
                 <span className="text-xs font-semibold text-amber-700">Step 1 of 2: Create your account</span>
-                <p className="text-[11px] text-amber-600/70">Then you'll set up your Pro subscription</p>
+                <p className="text-[11px] text-amber-600/70">Then you'll get lifetime Pro for a one-time $29</p>
               </div>
             </div>
           )}
           <h1 className="text-xl font-bold text-gray-900 mb-1">{isProFlow ? "Create your Pro account" : "Create your account"}</h1>
-          <p className="text-sm text-gray-500 mb-6">{isProFlow ? "Sign up to start your $49/month Pro subscription" : "Start mapping websites visually"}</p>
+          <p className="text-sm text-gray-500 mb-6">{isProFlow ? "Sign up to unlock lifetime Pro for $29" : "Start mapping websites visually"}</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

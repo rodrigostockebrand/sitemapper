@@ -502,16 +502,21 @@ export async function registerRoutes(
         storage.updateUser(user.id, { stripeCustomerId: customerId });
       }
 
+      // One-time $29 charge for lifetime Pro access. Requires the
+      // STRIPE_PRICE_ID env var to point to a one-time (non-recurring)
+      // Price in Stripe — see README for setup.
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
-        mode: "subscription",
+        mode: "payment",
         line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
         allow_promotion_codes: true,
         success_url: `${APP_URL}/#/upgrade-success`,
         cancel_url: `${APP_URL}/#/pricing`,
-        subscription_data: {
+        payment_intent_data: {
           metadata: { userId: user.id },
         },
+        // Auto-create an invoice so the user gets a receipt for their records
+        invoice_creation: { enabled: true },
       });
 
       res.json({ url: session.url });
@@ -574,28 +579,64 @@ export async function registerRoutes(
       switch (event.type) {
         case "checkout.session.completed": {
           const session = event.data.object as Stripe.Checkout.Session;
-          if (session.mode === "subscription" && session.customer) {
-            const customerId = typeof session.customer === "string" ? session.customer : session.customer.id;
-            const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
-            const user = storage.getUserByStripeCustomerId(customerId);
-            if (user) {
-              storage.updateUser(user.id, {
-                tier: "pro",
-                stripeSubscriptionId: subscriptionId || null,
-              });
-              console.log(`User ${user.email} upgraded to Pro (subscription: ${subscriptionId})`);
-            }
+          if (!session.customer) break;
+          const customerId = typeof session.customer === "string" ? session.customer : session.customer.id;
+          const user = storage.getUserByStripeCustomerId(customerId);
+          if (!user) break;
+
+          // One-time payment for lifetime Pro access
+          if (session.mode === "payment") {
+            const paymentIntentId =
+              typeof session.payment_intent === "string"
+                ? session.payment_intent
+                : session.payment_intent?.id;
+            storage.updateUser(user.id, {
+              tier: "pro",
+              // Reuse this column to record the one-time PaymentIntent so we
+              // can match a future refund event back to the customer.
+              stripeSubscriptionId: paymentIntentId || null,
+            });
+            console.log(`User ${user.email} upgraded to Pro (one-time payment: ${paymentIntentId})`);
+            break;
+          }
+
+          // Legacy: existing $49/mo subscribers signed up before we switched
+          // to one-time. Their subscriptions continue until canceled.
+          if (session.mode === "subscription") {
+            const subscriptionId =
+              typeof session.subscription === "string"
+                ? session.subscription
+                : session.subscription?.id;
+            storage.updateUser(user.id, {
+              tier: "pro",
+              stripeSubscriptionId: subscriptionId || null,
+            });
+            console.log(`User ${user.email} upgraded to Pro (legacy subscription: ${subscriptionId})`);
           }
           break;
         }
 
+        // Refund on a one-time payment → downgrade to Free
+        case "charge.refunded": {
+          const charge = event.data.object as Stripe.Charge;
+          // Only act on fully-refunded charges (Stripe also fires this for partial refunds)
+          if (!charge.refunded || charge.amount_refunded < charge.amount) break;
+          const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
+          if (!customerId) break;
+          const user = storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            storage.updateUser(user.id, { tier: "free", stripeSubscriptionId: null });
+            console.log(`User ${user.email} refunded — downgraded to Free`);
+          }
+          break;
+        }
+
+        // Legacy subscription lifecycle for users still on the old $49/mo plan
         case "customer.subscription.updated": {
           const sub = event.data.object as Stripe.Subscription;
           const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
           const user = storage.getUserByStripeCustomerId(customerId);
           if (user) {
-            // If subscription is canceled at period end or past_due, keep pro until period ends
-            // If status is active, ensure they're pro
             if (sub.status === "active") {
               storage.updateUser(user.id, { tier: "pro", stripeSubscriptionId: sub.id });
             } else if (sub.status === "canceled" || sub.status === "unpaid") {

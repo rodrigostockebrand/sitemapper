@@ -153,7 +153,7 @@ export default function DashboardPage() {
                   className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors mt-1"
                 >
                   <CreditCard className="w-3 h-3" />
-                  Manage billing
+                  Billing &amp; receipts
                 </button>
               )}
             </div>
