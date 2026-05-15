@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { randomUUID, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
@@ -400,10 +400,22 @@ export async function registerRoutes(
     }
   });
 
-  // Get crawl job status
-  app.get("/api/crawl/:id", (req, res) => {
+  // Check whether the request is allowed to view a crawl job. Owners always
+  // see their own jobs; anonymous-owned jobs (userId === null) are viewable
+  // by anyone with the UUID (share-by-link). Jobs owned by another user are
+  // forbidden — NEVER leak another user's crawls.
+  function canViewJob(job: { userId: string | null }, req: Request): boolean {
+    const u = getRequestUser(req);
+    if (!job.userId) return true; // anonymous crawl — share-by-link allowed
+    return !!u && u.id === job.userId;
+  }
+
+  app.get("/api/crawl/:id", optionalAuth, (req, res) => {
     const job = storage.getCrawlJob(req.params.id);
     if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+    if (!canViewJob(job, req)) {
       return res.status(404).json({ error: "Job not found" });
     }
     const lightPages = job.pages.map((p) => ({
@@ -415,9 +427,12 @@ export async function registerRoutes(
   });
 
   // Get full crawl job
-  app.get("/api/crawl/:id/full", (req, res) => {
+  app.get("/api/crawl/:id/full", optionalAuth, (req, res) => {
     const job = storage.getCrawlJob(req.params.id);
     if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+    if (!canViewJob(job, req)) {
       return res.status(404).json({ error: "Job not found" });
     }
     const lightPages = job.pages.map((p) => ({
@@ -430,7 +445,14 @@ export async function registerRoutes(
 
   // Get a single page screenshot. Pass ?thumb=1 for the small (~480×304)
   // variant used by the sitemap card grid.
-  app.get("/api/crawl/:id/page/:pageId/screenshot", (req, res) => {
+  app.get("/api/crawl/:id/page/:pageId/screenshot", optionalAuth, (req, res) => {
+    const job = storage.getCrawlJob(req.params.id);
+    if (!job) {
+      return res.status(404).json({ error: "Screenshot not found" });
+    }
+    if (!canViewJob(job, req)) {
+      return res.status(404).json({ error: "Screenshot not found" });
+    }
     const wantThumb = req.query.thumb === "1" || req.query.thumb === "true";
     const buffer = wantThumb
       ? storage.getThumbnail(req.params.id, req.params.pageId)
@@ -447,10 +469,11 @@ export async function registerRoutes(
     res.send(buffer);
   });
 
-  // List current user's crawl history
-  app.get("/api/crawls", optionalAuth, (req, res) => {
-    const user = getRequestUser(req);
-    const jobs = (user ? storage.getCrawlJobsByUser(user.id) : storage.getAllCrawlJobs()).map((j) => ({
+  // List current user's crawl history. MUST require auth — falling back to
+  // "all jobs" for anonymous callers would leak every user's history.
+  app.get("/api/crawls", requireAuth, (req, res) => {
+    const user = getRequestUser(req)!;
+    const jobs = storage.getCrawlJobsByUser(user.id).map((j) => ({
       id: j.id,
       domain: j.domain,
       status: j.status,
