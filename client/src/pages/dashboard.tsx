@@ -16,7 +16,17 @@ import {
   CreditCard,
   Trash2,
   X,
+  ChevronDown,
+  LogOut,
+  LayoutDashboard,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -57,7 +67,7 @@ function timeAgo(dateStr: string): string {
 
 export default function DashboardPage() {
   const [, navigate] = useLocation();
-  const { user, limits, crawlsThisMonth, crawlsRemaining, loading: authLoading } = useAuth();
+  const { user, limits, crawlsThisMonth, crawlsRemaining, loading: authLoading, logout } = useAuth();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -129,7 +139,47 @@ export default function DashboardPage() {
                 </Button>
               </Link>
             )}
-            <span className="text-sm text-gray-500">{user.name}</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 outline-none"
+                  data-testid="button-user-menu"
+                >
+                  {user.name}
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <Link href="/">
+                  <DropdownMenuItem className="cursor-pointer" data-testid="menuitem-home">
+                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                    New crawl
+                  </DropdownMenuItem>
+                </Link>
+                {!isFree && (
+                  <DropdownMenuItem
+                    onClick={handleManageBilling}
+                    className="cursor-pointer"
+                    data-testid="menuitem-billing"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Billing &amp; receipts
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    logout();
+                    navigate("/");
+                  }}
+                  className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
+                  data-testid="menuitem-logout"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

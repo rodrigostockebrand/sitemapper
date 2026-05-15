@@ -16,7 +16,17 @@ import {
   Mail,
   Shield,
   Sparkles,
+  ChevronDown,
+  LayoutDashboard,
+  LogOut,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 /* ── real website screenshot tiles ─────────────────────────── */
 const TILE_IMAGES = [
@@ -119,7 +129,7 @@ function SitemapLogo({ className = "" }: { className?: string }) {
 }
 
 export default function Home() {
-  const { user, limits } = useAuth();
+  const { user, limits, logout } = useAuth();
   const routeParams = useParams<{ id?: string }>();
   const [, navigate] = useLocation();
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -189,11 +199,37 @@ export default function Home() {
               </button>
             )}
             {user ? (
-              <Link href="/dashboard">
-                <span className={`text-sm font-medium cursor-pointer ${showLanding ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`} data-testid="link-dashboard">
-                  {user.name}
-                </span>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={`inline-flex items-center gap-1 text-sm font-medium cursor-pointer outline-none ${showLanding ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`}
+                    data-testid="button-user-menu"
+                  >
+                    {user.name}
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <Link href="/dashboard">
+                    <DropdownMenuItem className="cursor-pointer" data-testid="menuitem-dashboard">
+                      <LayoutDashboard className="w-4 h-4 mr-2" />
+                      Dashboard
+                    </DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      logout();
+                      navigate("/");
+                    }}
+                    className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
+                    data-testid="menuitem-logout"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : (
               <>
                 <Link href="/login">

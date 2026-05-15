@@ -4,16 +4,27 @@ import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Mail, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, Mail, CheckCircle2, XCircle, LogOut } from "lucide-react";
+
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function VerifyEmailPage() {
   const [, navigate] = useLocation();
   const params = useParams<{ token?: string }>();
-  const { user, refreshUser, token: authToken } = useAuth();
+  const { user, refreshUser, token: authToken, logout } = useAuth();
   const { toast } = useToast();
   const [status, setStatus] = useState<"pending" | "verifying" | "success" | "error">("pending");
   const [errorMsg, setErrorMsg] = useState("");
   const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendCount, setResendCount] = useState(0);
+
+  // Tick down the cooldown each second
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
 
   // Check if there's a token in the URL (clicked from email)
   useEffect(() => {
@@ -49,15 +60,30 @@ export default function VerifyEmailPage() {
   }, [navigate, refreshUser, params.token]);
 
   async function handleResend() {
+    if (resending || resendCooldown > 0) return;
     setResending(true);
     try {
       await apiRequest("POST", "/api/auth/resend-verification");
-      toast({ title: "Verification email sent", description: "Check your inbox." });
+      setResendCount((n) => n + 1);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      toast({
+        title: "Verification email sent",
+        description: `We sent a new link to ${user?.email || "your email"}. Check your inbox (and spam).`,
+      });
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Failed to resend", description: err.message });
+      toast({
+        variant: "destructive",
+        title: "Failed to resend",
+        description: err.message || "Please try again in a moment.",
+      });
     } finally {
       setResending(false);
     }
+  }
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
   }
 
   if (status === "verifying") {
@@ -99,6 +125,15 @@ export default function VerifyEmailPage() {
   }
 
   // Default: show "check your email" screen (after registration)
+  const cooldownActive = resendCooldown > 0;
+  const resendLabel = resending
+    ? "Sending..."
+    : cooldownActive
+      ? `Resend in ${resendCooldown}s`
+      : resendCount > 0
+        ? "Send again"
+        : "Didn't get it? Send again";
+
   return (
     <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center px-4">
       <div className="text-center max-w-sm">
@@ -111,23 +146,56 @@ export default function VerifyEmailPage() {
           <span className="font-medium text-gray-700">{user?.email || "your email"}</span>.
         </p>
         <p className="text-sm text-gray-400 mb-8">
-          Click the link in the email to verify your account. It may take a minute to arrive.
+          Click the link in the email to verify your account. It may take a minute to arrive
+          — don't forget to check your spam folder.
         </p>
 
         {authToken && (
-          <Button
-            variant="outline"
-            onClick={handleResend}
-            disabled={resending}
-            className="mr-3"
-          >
-            {resending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Resend Email
-          </Button>
+          <div className="flex flex-col items-center gap-3 mb-6">
+            <Button
+              variant="outline"
+              onClick={handleResend}
+              disabled={resending || cooldownActive}
+              data-testid="button-resend-verification"
+              className="min-w-[200px]"
+            >
+              {resending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Mail className="w-4 h-4 mr-2" />
+              )}
+              {resendLabel}
+            </Button>
+            {resendCount > 0 && !cooldownActive && (
+              <p className="text-xs text-emerald-600" data-testid="text-resend-sent">
+                Sent {resendCount === 1 ? "a new link" : `${resendCount} new links`}. Still no email? Check spam or try again.
+              </p>
+            )}
+          </div>
         )}
-        <Link href="/">
-          <Button variant="ghost">Continue to App</Button>
-        </Link>
+
+        <div className="flex items-center justify-center gap-4 text-sm">
+          <Link href="/">
+            <Button variant="ghost" data-testid="button-continue-app">Continue to App</Button>
+          </Link>
+          {authToken && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              data-testid="button-logout"
+              className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <LogOut className="w-3 h-3" />
+              Log out
+            </button>
+          )}
+        </div>
+
+        {authToken && (
+          <p className="text-xs text-gray-400 mt-6">
+            Wrong email address? Log out and register again with the correct one.
+          </p>
+        )}
       </div>
     </div>
   );
