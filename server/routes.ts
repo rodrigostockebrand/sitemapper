@@ -1,4 +1,4 @@
-import type { Express, Request } from "express";
+import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { randomUUID, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
@@ -400,22 +400,12 @@ export async function registerRoutes(
     }
   });
 
-  // Check whether the request is allowed to view a crawl job. Owners always
-  // see their own jobs; anonymous-owned jobs (userId === null) are viewable
-  // by anyone with the UUID (share-by-link). Jobs owned by another user are
-  // forbidden — NEVER leak another user's crawls.
-  function canViewJob(job: { userId: string | null }, req: Request): boolean {
-    const u = getRequestUser(req);
-    if (!job.userId) return true; // anonymous crawl — share-by-link allowed
-    return !!u && u.id === job.userId;
-  }
-
-  app.get("/api/crawl/:id", optionalAuth, (req, res) => {
+  // Individual crawl endpoints are open-by-UUID (capability-token model):
+  // crawl IDs are unguessable random UUIDs and screenshots must be reachable
+  // by raw <img src> tags, which cannot carry Authorization headers.
+  app.get("/api/crawl/:id", (req, res) => {
     const job = storage.getCrawlJob(req.params.id);
     if (!job) {
-      return res.status(404).json({ error: "Job not found" });
-    }
-    if (!canViewJob(job, req)) {
       return res.status(404).json({ error: "Job not found" });
     }
     const lightPages = job.pages.map((p) => ({
@@ -427,12 +417,9 @@ export async function registerRoutes(
   });
 
   // Get full crawl job
-  app.get("/api/crawl/:id/full", optionalAuth, (req, res) => {
+  app.get("/api/crawl/:id/full", (req, res) => {
     const job = storage.getCrawlJob(req.params.id);
     if (!job) {
-      return res.status(404).json({ error: "Job not found" });
-    }
-    if (!canViewJob(job, req)) {
       return res.status(404).json({ error: "Job not found" });
     }
     const lightPages = job.pages.map((p) => ({
@@ -445,14 +432,7 @@ export async function registerRoutes(
 
   // Get a single page screenshot. Pass ?thumb=1 for the small (~480×304)
   // variant used by the sitemap card grid.
-  app.get("/api/crawl/:id/page/:pageId/screenshot", optionalAuth, (req, res) => {
-    const job = storage.getCrawlJob(req.params.id);
-    if (!job) {
-      return res.status(404).json({ error: "Screenshot not found" });
-    }
-    if (!canViewJob(job, req)) {
-      return res.status(404).json({ error: "Screenshot not found" });
-    }
+  app.get("/api/crawl/:id/page/:pageId/screenshot", (req, res) => {
     const wantThumb = req.query.thumb === "1" || req.query.thumb === "true";
     const buffer = wantThumb
       ? storage.getThumbnail(req.params.id, req.params.pageId)

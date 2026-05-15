@@ -3,6 +3,16 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, Globe, Camera, CheckCircle2, AlertCircle } from "lucide-react";
 import type { CrawlJob } from "@shared/schema";
 import { API_BASE } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth";
+
+// Build fetch init that includes the user's bearer token when logged in. The
+// backend's crawl detail endpoints reject other users' jobs, so the polling
+// requests need to identify the caller — otherwise an owner-locked job looks
+// like a 404 and progress is stuck at 0%.
+function authedFetchInit(): RequestInit {
+  const token = getAuthToken();
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+}
 
 interface CrawlProgressProps {
   jobId: string;
@@ -21,7 +31,7 @@ export function CrawlProgress({ jobId, onComplete }: CrawlProgressProps) {
 
   const fetchFullData = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/crawl/${jobId}/full`);
+      const res = await fetch(`${API_BASE}/api/crawl/${jobId}/full`, authedFetchInit());
       if (!res.ok) throw new Error("Failed to fetch results");
       const fullData = await res.json();
       onComplete(fullData);
@@ -30,7 +40,7 @@ export function CrawlProgress({ jobId, onComplete }: CrawlProgressProps) {
       // Retry once after short delay
       setTimeout(async () => {
         try {
-          const res = await fetch(`${API_BASE}/api/crawl/${jobId}/full`);
+          const res = await fetch(`${API_BASE}/api/crawl/${jobId}/full`, authedFetchInit());
           const fullData = await res.json();
           onComplete(fullData);
         } catch {
@@ -45,7 +55,7 @@ export function CrawlProgress({ jobId, onComplete }: CrawlProgressProps) {
     // Use HTTP polling for reliable progress updates (works through proxy)
     const poll = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/crawl/${jobId}`);
+        const res = await fetch(`${API_BASE}/api/crawl/${jobId}`, authedFetchInit());
         if (!res.ok) return;
         const data = await res.json();
 
