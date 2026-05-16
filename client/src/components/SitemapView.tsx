@@ -262,13 +262,16 @@ function filterPages(
   pages: PageNode[],
   statusFilter: Set<StatusBucket>,
   urlQuery: string,
-): PageNode[] {
+  strict: boolean,
+): { pages: PageNode[]; matchedIds: Set<string> } {
   const query = urlQuery.trim().toLowerCase();
   const allActive = statusFilter.size === ALL_BUCKETS.length;
-  if (allActive && !query) return pages;
+  if (allActive && !query) {
+    return { pages, matchedIds: new Set(pages.map((p) => p.id)) };
+  }
 
   const byId = new Map(pages.map((p) => [p.id, p]));
-  const keep = new Set<string>();
+  const matchedIds = new Set<string>();
 
   const matches = (p: PageNode) => {
     if (!statusFilter.has(bucketOf(p.statusCode))) return false;
@@ -279,18 +282,30 @@ function filterPages(
     return true;
   };
 
-  // Walk up to root for every match, adding ancestors.
   for (const p of pages) {
-    if (!matches(p)) continue;
-    let cur: PageNode | undefined = p;
-    while (cur) {
-      if (keep.has(cur.id)) break;
-      keep.add(cur.id);
-      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    if (matches(p)) matchedIds.add(p.id);
+  }
+
+  // Strict mode: only the actual matches, no ancestors. Matched pages whose
+  // parent isn't in the kept set become roots automatically in buildTree.
+  if (strict) {
+    return { pages: pages.filter((p) => matchedIds.has(p.id)), matchedIds };
+  }
+
+  // Default mode: keep ancestors so the tree stays connected and you can see
+  // where the matches live in the site hierarchy.
+  const keep = new Set<string>(matchedIds);
+  for (const id of matchedIds) {
+    let cur: PageNode | undefined = byId.get(id);
+    while (cur?.parentId) {
+      const parent = byId.get(cur.parentId);
+      if (!parent || keep.has(parent.id)) break;
+      keep.add(parent.id);
+      cur = parent;
     }
   }
 
-  return pages.filter((p) => keep.has(p.id));
+  return { pages: pages.filter((p) => keep.has(p.id)), matchedIds };
 }
 
 export function SitemapView({ job }: SitemapViewProps) {
@@ -313,17 +328,24 @@ export function SitemapView({ job }: SitemapViewProps) {
   const [hierarchyMode, setHierarchyMode] = useState(false);
 
   // Filters
+  const [strictFilter, setStrictFilter] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Set<StatusBucket>>(
     () => new Set(ALL_BUCKETS),
   );
   const [urlQuery, setUrlQuery] = useState("");
   const filtersActive =
-    statusFilter.size !== ALL_BUCKETS.length || urlQuery.trim().length > 0;
+    statusFilter.size !== ALL_BUCKETS.length ||
+    urlQuery.trim().length > 0 ||
+    strictFilter;
 
-  const filteredPages = useMemo(
-    () => filterPages(job.pages, statusFilter, urlQuery),
-    [job.pages, statusFilter, urlQuery],
+  const filterResult = useMemo(
+    () => filterPages(job.pages, statusFilter, urlQuery, strictFilter),
+    [job.pages, statusFilter, urlQuery, strictFilter],
   );
+  const filteredPages = filterResult.pages;
+  const matchedIds = filterResult.matchedIds;
+  const matchedCount = matchedIds.size;
+  const contextCount = filteredPages.length - matchedCount;
 
   // Per-bucket counts for the status dropdown (always from the full set)
   const bucketCounts = useMemo(() => {
@@ -346,6 +368,7 @@ export function SitemapView({ job }: SitemapViewProps) {
   const clearFilters = useCallback(() => {
     setStatusFilter(new Set(ALL_BUCKETS));
     setUrlQuery("");
+    setStrictFilter(false);
   }, []);
 
   // Zoom-to-area state
@@ -362,7 +385,7 @@ export function SitemapView({ job }: SitemapViewProps) {
   const firstRenderRef = useRef(true);
 
   // Re-fit when filters change so the newly narrowed tree gets a sensible view
-  const filtersKey = `${Array.from(statusFilter).sort().join(",")}|${urlQuery.trim().toLowerCase()}`;
+  const filtersKey = `${Array.from(statusFilter).sort().join(",")}|${urlQuery.trim().toLowerCase()}|${strictFilter ? 1 : 0}`;
   useEffect(() => {
     if (firstRenderRef.current) return;
     handleFitView();
@@ -663,6 +686,22 @@ export function SitemapView({ job }: SitemapViewProps) {
                   Clear all
                 </button>
               </div>
+              <label
+                className="flex items-start gap-2 px-2 pt-2 mt-1 border-t border-border cursor-pointer"
+                data-testid="toggle-strict-filter"
+              >
+                <Checkbox
+                  checked={strictFilter}
+                  onCheckedChange={(v) => setStrictFilter(!!v)}
+                  className="mt-0.5"
+                />
+                <span className="text-xs flex-1">
+                  Matches only
+                  <span className="block text-[10px] text-muted-foreground mt-0.5">
+                    Hide parent pages used as breadcrumbs
+                  </span>
+                </span>
+              </label>
             </PopoverContent>
           </Popover>
 
@@ -672,10 +711,15 @@ export function SitemapView({ job }: SitemapViewProps) {
               <span className="text-[11px] text-muted-foreground whitespace-nowrap">
                 Showing{" "}
                 <span className="font-semibold text-foreground">
-                  {filteredPages.length}
+                  {matchedCount}
                 </span>
                 {" of "}
                 {job.pages.length}
+                {contextCount > 0 && (
+                  <span className="ml-1 text-muted-foreground/70">
+                    (+{contextCount} parent{contextCount === 1 ? "" : "s"})
+                  </span>
+                )}
               </span>
               <button
                 onClick={clearFilters}
