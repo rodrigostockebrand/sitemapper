@@ -88,10 +88,10 @@ export default function VerifyEmailPage() {
 
   if (status === "verifying") {
     return (
-      <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center dark:bg-background">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
-          <p className="text-gray-600">Verifying your email...</p>
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4 dark:text-primary" />
+          <p className="text-gray-600 dark:text-muted-foreground">Verifying your email...</p>
         </div>
       </div>
     );
@@ -99,11 +99,11 @@ export default function VerifyEmailPage() {
 
   if (status === "success") {
     return (
-      <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center dark:bg-background">
         <div className="text-center max-w-sm">
           <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Email Verified</h1>
-          <p className="text-gray-500 mb-6">Your account is all set. Redirecting you to the app...</p>
+          <h1 className="text-xl font-bold text-gray-900 mb-2 dark:text-foreground">Email Verified</h1>
+          <p className="text-gray-500 mb-6 dark:text-muted-foreground">Your account is all set. Redirecting you to the app...</p>
         </div>
       </div>
     );
@@ -111,11 +111,11 @@ export default function VerifyEmailPage() {
 
   if (status === "error") {
     return (
-      <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center dark:bg-background">
         <div className="text-center max-w-sm">
           <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Verification Failed</h1>
-          <p className="text-gray-500 mb-6">{errorMsg}</p>
+          <h1 className="text-xl font-bold text-gray-900 mb-2 dark:text-foreground">Verification Failed</h1>
+          <p className="text-gray-500 mb-6 dark:text-muted-foreground">{errorMsg}</p>
           <Link href="/">
             <Button variant="outline">Back to Home</Button>
           </Link>
@@ -135,17 +135,17 @@ export default function VerifyEmailPage() {
         : "Didn't get it? Send again";
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center px-4 dark:bg-background">
       <div className="text-center max-w-sm">
         <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-6">
-          <Mail className="w-8 h-8 text-blue-500" />
+          <Mail className="w-8 h-8 text-blue-500 dark:text-primary" />
         </div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Check your email</h1>
-        <p className="text-gray-500 mb-2">
+        <h1 className="text-xl font-bold text-gray-900 mb-2 dark:text-foreground">Check your email</h1>
+        <p className="text-gray-500 mb-2 dark:text-muted-foreground">
           We sent a verification link to{" "}
-          <span className="font-medium text-gray-700">{user?.email || "your email"}</span>.
+          <span className="font-medium text-gray-700 dark:text-foreground/90">{user?.email || "your email"}</span>.
         </p>
-        <p className="text-sm text-gray-400 mb-8">
+        <p className="text-sm text-gray-400 mb-8 dark:text-muted-foreground/70">
           Click the link in the email to verify your account. It may take a minute to arrive
           — don't forget to check your spam folder.
         </p>
@@ -183,7 +183,7 @@ export default function VerifyEmailPage() {
               type="button"
               onClick={handleLogout}
               data-testid="button-logout"
-              className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors dark:text-muted-foreground"
             >
               <LogOut className="w-3 h-3" />
               Log out
@@ -192,7 +192,7 @@ export default function VerifyEmailPage() {
         </div>
 
         {authToken && (
-          <p className="text-xs text-gray-400 mt-6">
+          <p className="text-xs text-gray-400 mt-6 dark:text-muted-foreground/70">
             Wrong email address? Log out and register again with the correct one.
           </p>
         )}

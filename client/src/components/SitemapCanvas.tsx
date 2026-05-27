@@ -190,7 +190,7 @@ function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
         )}
         {isError && (
           <div className="absolute inset-0 bg-red-500/15 flex items-center justify-center">
-            <span className="text-red-600 text-xs font-bold bg-white/80 px-1.5 py-0.5 rounded">
+            <span className="text-red-600 dark:text-red-300 text-xs font-bold bg-white/80 dark:bg-card/90 px-1.5 py-0.5 rounded">
               {node.statusCode || "ERR"}
             </span>
           </div>
@@ -394,32 +394,39 @@ function SitemapCanvasImpl({
         // Depth-driven styling. The PARENT's depth determines the edge
         // weight — so all edges leaving the homepage look like "trunks",
         // edges leaving depth-1 pages look like "branches", and so on.
+        // Colors are theme-aware via CSS vars; trunks/branches get a glow
+        // filter in dark mode via the .sitemap-edge-trunk/branch classes.
         const d = node.depth;
         let strokeWidth: number;
         let stroke: string;
         let opacity: number;
+        let edgeClass: string;
         if (d === 0) {
-          // Trunks: edges from the homepage. Thick, primary-colored, opaque.
           strokeWidth = 4;
-          stroke = "hsl(var(--primary))";
-          opacity = 0.9;
+          stroke = "hsl(var(--sitemap-trunk))";
+          opacity = 0.95;
+          edgeClass = "sitemap-edge-trunk";
         } else if (d === 1) {
           strokeWidth = 2.5;
-          stroke = "hsl(var(--primary) / 0.55)";
-          opacity = 0.85;
+          stroke = "hsl(var(--sitemap-branch))";
+          opacity = 0.9;
+          edgeClass = "sitemap-edge-branch";
         } else if (d === 2) {
           strokeWidth = 1.75;
-          stroke = "hsl(var(--border))";
+          stroke = "hsl(var(--sitemap-capillary))";
           opacity = 0.85;
+          edgeClass = "sitemap-edge-capillary";
         } else {
           strokeWidth = 1.25;
-          stroke = "hsl(var(--border))";
+          stroke = "hsl(var(--sitemap-capillary))";
           opacity = 0.6;
+          edgeClass = "sitemap-edge-capillary";
         }
 
         out.push(
           <path
             key={`${node.id}-${child.id}`}
+            className={edgeClass}
             d={`M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`}
             stroke={stroke}
             strokeWidth={strokeWidth}

@@ -30,21 +30,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center px-4 dark:bg-background">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/">
-            <span className="text-lg font-bold text-gray-900 cursor-pointer">The Visual Sitemapper</span>
+            <span className="text-lg font-bold text-gray-900 cursor-pointer dark:text-foreground">The Visual Sitemapper</span>
           </Link>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200/60 shadow-lg p-8">
-          <h1 className="text-xl font-bold text-gray-900 mb-1">Welcome back</h1>
-          <p className="text-sm text-gray-500 mb-6">Sign in to your account</p>
+        <div className="bg-white rounded-2xl border border-gray-200/60 shadow-lg p-8 dark:bg-card dark:border-border">
+          <h1 className="text-xl font-bold text-gray-900 mb-1 dark:text-foreground">Welcome back</h1>
+          <p className="text-sm text-gray-500 mb-6 dark:text-muted-foreground">Sign in to your account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label htmlFor="email" className="text-gray-700">Email</Label>
+              <Label htmlFor="email" className="text-gray-700 dark:text-foreground/90">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -57,7 +57,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <Label htmlFor="password" className="text-gray-700">Password</Label>
+              <Label htmlFor="password" className="text-gray-700 dark:text-foreground/90">Password</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -70,7 +70,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-muted-foreground"
                   onClick={() => setShowPw(!showPw)}
                 >
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -89,9 +89,9 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <p className="text-sm text-gray-500 text-center mt-6">
+          <p className="text-sm text-gray-500 text-center mt-6 dark:text-muted-foreground">
             Don't have an account?{" "}
-            <Link href="/register" className="text-blue-500 hover:text-blue-600 font-medium">
+            <Link href="/register" className="text-blue-500 hover:text-blue-600 font-medium dark:text-primary">
               Sign up
             </Link>
           </p>

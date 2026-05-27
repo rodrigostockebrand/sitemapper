@@ -126,7 +126,7 @@ export default function BetaPage() {
           {!codeAccepted ? (
             <>
               <h1 className="text-xl font-bold text-white mb-1">Join the Beta Club</h1>
-              <p className="text-sm text-gray-400 mb-6">
+              <p className="text-sm text-gray-400 mb-6 dark:text-muted-foreground/70">
                 Enter your invite code to claim your spot in our private beta &mdash; no billing required.
               </p>
 
@@ -145,7 +145,7 @@ export default function BetaPage() {
                     autoFocus
                     autoComplete="off"
                     spellCheck={false}
-                    className="bg-white/5 border-white/15 text-white placeholder:text-gray-500 font-mono tracking-wider"
+                    className="bg-white/5 border-white/15 text-white placeholder:text-gray-500 font-mono tracking-wider dark:text-muted-foreground"
                     data-testid="input-beta-code"
                   />
                   {codeError && (
@@ -165,7 +165,7 @@ export default function BetaPage() {
                 </Button>
               </form>
 
-              <p className="text-xs text-gray-500 text-center mt-6">
+              <p className="text-xs text-gray-500 text-center mt-6 dark:text-muted-foreground">
                 Don&rsquo;t have an invite?{" "}
                 <Link href="/register" className="text-blue-400 hover:text-blue-300 font-medium">
                   Create a free account
@@ -175,7 +175,7 @@ export default function BetaPage() {
           ) : (
             <>
               <h1 className="text-xl font-bold text-white mb-1">Welcome to the Beta Club</h1>
-              <p className="text-sm text-gray-400 mb-6">
+              <p className="text-sm text-gray-400 mb-6 dark:text-muted-foreground/70">
                 Invite verified. Set up your Beta Club account &mdash; you&rsquo;ll get full access from day one.
               </p>
 
@@ -189,7 +189,7 @@ export default function BetaPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    className="bg-white/5 border-white/15 text-white placeholder:text-gray-500"
+                    className="bg-white/5 border-white/15 text-white placeholder:text-gray-500 dark:text-muted-foreground"
                     data-testid="input-beta-name"
                   />
                 </div>
@@ -203,7 +203,7 @@ export default function BetaPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="bg-white/5 border-white/15 text-white placeholder:text-gray-500"
+                    className="bg-white/5 border-white/15 text-white placeholder:text-gray-500 dark:text-muted-foreground"
                     data-testid="input-beta-email"
                   />
                 </div>
@@ -219,12 +219,12 @@ export default function BetaPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={8}
-                      className="bg-white/5 border-white/15 text-white placeholder:text-gray-500"
+                      className="bg-white/5 border-white/15 text-white placeholder:text-gray-500 dark:text-muted-foreground"
                       data-testid="input-beta-password"
                     />
                     <button
                       type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 dark:text-muted-foreground/70"
                       onClick={() => setShowPw(!showPw)}
                     >
                       {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -243,7 +243,7 @@ export default function BetaPage() {
                 </Button>
               </form>
 
-              <p className="text-xs text-gray-500 text-center mt-6">
+              <p className="text-xs text-gray-500 text-center mt-6 dark:text-muted-foreground">
                 Already a beta user?{" "}
                 <Link href="/login" className="text-blue-400 hover:text-blue-300 font-medium">
                   Sign in

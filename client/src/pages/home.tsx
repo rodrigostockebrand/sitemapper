@@ -19,6 +19,8 @@ import {
   ChevronDown,
   LayoutDashboard,
   LogOut,
+  Sun,
+  Moon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,6 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useTheme } from "@/lib/theme";
 
 /* ── real website screenshot tiles ─────────────────────────── */
 const TILE_IMAGES = [
@@ -130,6 +133,7 @@ function SitemapLogo({ className = "" }: { className?: string }) {
 
 export default function Home() {
   const { user, limits, logout } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
   const routeParams = useParams<{ id?: string }>();
   const [, navigate] = useLocation();
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -216,13 +220,28 @@ export default function Home() {
                       Dashboard
                     </DropdownMenuItem>
                   </Link>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleTheme();
+                    }}
+                    className="cursor-pointer"
+                    data-testid="menuitem-theme"
+                  >
+                    {theme === "dark" ? (
+                      <Sun className="w-4 h-4 mr-2" />
+                    ) : (
+                      <Moon className="w-4 h-4 mr-2" />
+                    )}
+                    {theme === "dark" ? "Light mode" : "Dark mode"}
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     onClick={() => {
                       logout();
                       navigate("/");
                     }}
-                    className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
+                    className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50 dark:text-red-400 dark:focus:text-red-300 dark:focus:bg-red-950/40"
                     data-testid="menuitem-logout"
                   >
                     <LogOut className="w-4 h-4 mr-2" />
@@ -232,6 +251,15 @@ export default function Home() {
               </DropdownMenu>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  className={`inline-flex items-center justify-center w-8 h-8 rounded-full transition-colors ${showLanding ? "text-gray-300 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/10"}`}
+                  data-testid="button-theme-toggle"
+                >
+                  {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </button>
                 <Link href="/login">
                   <span className={`text-sm font-medium cursor-pointer ${showLanding ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-gray-900"}`} data-testid="link-login">
                     Sign In

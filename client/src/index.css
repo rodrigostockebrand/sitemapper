@@ -43,6 +43,12 @@
   --chart-3: 30 80% 55%;
   --chart-4: 280 60% 55%;
   --chart-5: 350 65% 55%;
+  /* Sitemap connection lines — depth-driven trunk / branch / capillary colors */
+  --sitemap-trunk: 210 80% 50%;
+  --sitemap-branch: 210 80% 60%;
+  --sitemap-capillary: 220 10% 75%;
+  --sitemap-canvas-bg: 220 25% 98%;
+  --sitemap-canvas-bg-gradient: 220 25% 96%;
   --font-sans: 'General Sans', 'Inter', 'Helvetica Neue', sans-serif;
   --font-mono: 'JetBrains Mono', 'Menlo', monospace;
   --radius: .5rem;
@@ -79,40 +85,47 @@
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .09);
-  --background: 222 25% 8%;
-  --foreground: 220 10% 92%;
-  --border: 222 15% 18%;
-  --card: 222 22% 11%;
-  --card-foreground: 220 10% 92%;
-  --card-border: 222 15% 16%;
-  --sidebar: 222 28% 6%;
-  --sidebar-foreground: 220 10% 85%;
-  --sidebar-border: 222 20% 14%;
-  --sidebar-primary: 210 75% 58%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 222 20% 16%;
-  --sidebar-accent-foreground: 220 10% 85%;
-  --sidebar-ring: 210 75% 58%;
-  --popover: 222 22% 12%;
-  --popover-foreground: 220 10% 92%;
-  --popover-border: 222 15% 18%;
-  --primary: 210 75% 58%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 222 15% 18%;
-  --secondary-foreground: 220 10% 92%;
-  --muted: 222 12% 20%;
-  --muted-foreground: 220 8% 55%;
-  --accent: 222 15% 16%;
-  --accent-foreground: 220 10% 92%;
-  --destructive: 0 70% 50%;
+  --background: 222 30% 7%;
+  --foreground: 220 15% 94%;
+  --border: 222 18% 20%;
+  --card: 222 25% 11%;
+  --card-foreground: 220 15% 94%;
+  --card-border: 222 18% 18%;
+  --sidebar: 222 30% 5%;
+  --sidebar-foreground: 220 10% 90%;
+  --sidebar-border: 222 22% 14%;
+  --sidebar-primary: 200 100% 62%;
+  --sidebar-primary-foreground: 222 30% 5%;
+  --sidebar-accent: 222 22% 16%;
+  --sidebar-accent-foreground: 220 10% 90%;
+  --sidebar-ring: 200 100% 62%;
+  --popover: 222 25% 13%;
+  --popover-foreground: 220 15% 94%;
+  --popover-border: 222 18% 22%;
+  /* VIBRANT electric blue — makes buttons, links, and sitemap trunks pop */
+  --primary: 200 100% 62%;
+  --primary-foreground: 222 30% 5%;
+  --secondary: 222 18% 18%;
+  --secondary-foreground: 220 15% 94%;
+  --muted: 222 15% 18%;
+  --muted-foreground: 220 10% 65%;
+  --accent: 222 18% 16%;
+  --accent-foreground: 220 15% 94%;
+  --destructive: 0 85% 62%;
   --destructive-foreground: 0 0% 100%;
-  --input: 222 12% 28%;
-  --ring: 210 75% 58%;
-  --chart-1: 210 75% 62%;
-  --chart-2: 160 55% 52%;
-  --chart-3: 30 75% 62%;
-  --chart-4: 280 55% 62%;
-  --chart-5: 350 60% 62%;
+  --input: 222 15% 26%;
+  --ring: 200 100% 62%;
+  --chart-1: 200 100% 62%;
+  --chart-2: 160 80% 58%;
+  --chart-3: 30 100% 65%;
+  --chart-4: 280 80% 70%;
+  --chart-5: 350 85% 68%;
+  /* Sitemap connection lines — BRIGHT, glowing in dark mode */
+  --sitemap-trunk: 195 100% 62%;
+  --sitemap-branch: 270 90% 70%;
+  --sitemap-capillary: 220 15% 45%;
+  --sitemap-canvas-bg: 222 32% 6%;
+  --sitemap-canvas-bg-gradient: 222 35% 9%;
   --shadow-2xs: 0 1px 2px hsl(0 0% 0% / 0.1);
   --shadow-xs: 0 1px 3px hsl(0 0% 0% / 0.15);
   --shadow-sm: 0 2px 6px hsl(0 0% 0% / 0.2);
@@ -161,6 +174,15 @@
 .sitemap-node:hover {
   transform: scale(1.03);
   z-index: 10;
+}
+
+/* Trunk lines glow in dark mode — a subtle drop-shadow makes them feel
+   electric without overpowering the cards. */
+.dark .sitemap-edge-trunk {
+  filter: drop-shadow(0 0 6px hsl(var(--sitemap-trunk) / 0.55));
+}
+.dark .sitemap-edge-branch {
+  filter: drop-shadow(0 0 3px hsl(var(--sitemap-branch) / 0.4));
 }
 
 /* Custom scrollbar */
