@@ -478,6 +478,28 @@ export async function registerRoutes(
     res.json({ ok: true });
   });
 
+  // ── Admin / analytics ─────────────────────────
+  // Restricted to whitelisted admin emails (configure via ADMIN_EMAILS env,
+  // comma-separated). Defaults to the founder address only.
+  const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "rodrigo.stockebrand@gmail.com")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  app.get("/api/admin/stats", requireAuth, (req, res) => {
+    const user = getRequestUser(req)!;
+    if (!ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+    try {
+      const stats = storage.getAdminStats();
+      res.json(stats);
+    } catch (err: any) {
+      console.error("admin stats failed:", err);
+      res.status(500).json({ error: err?.message || "Failed to load stats" });
+    }
+  });
+
   // ── Stripe billing routes ──────────────────────────────
 
   // Create checkout session → redirect user to Stripe-hosted payment page

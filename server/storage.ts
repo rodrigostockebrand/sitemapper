@@ -177,6 +177,30 @@ export interface IStorage {
   getScreenshot(jobId: string, pageId: string): Buffer | null;
   getThumbnail(jobId: string, pageId: string): Buffer | null;
   hasScreenshot(jobId: string, pageId: string): boolean;
+
+  // Admin / analytics
+  getAdminStats(): AdminStats;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  verifiedUsers: number;
+  unverifiedUsers: number;
+  freeUsers: number;
+  proUsers: number;
+  signupsLast24h: number;
+  signupsLast7d: number;
+  signupsLast30d: number;
+  totalCrawls: number;
+  crawlsLast24h: number;
+  crawlsLast7d: number;
+  recentSignups: Array<{
+    email: string;
+    name: string;
+    tier: string;
+    emailVerified: boolean;
+    createdAt: string;
+  }>;
 }
 
 export class SqliteStorage implements IStorage {
@@ -402,6 +426,53 @@ export class SqliteStorage implements IStorage {
 
   hasScreenshot(jobId: string, pageId: string): boolean {
     return hasScreenshotOnDisk(jobId, pageId);
+  }
+
+  // ── Admin / analytics ─────────────────────────────────
+  getAdminStats(): AdminStats {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const cutoff24h = new Date(now - dayMs).toISOString();
+    const cutoff7d = new Date(now - 7 * dayMs).toISOString();
+    const cutoff30d = new Date(now - 30 * dayMs).toISOString();
+
+    const totalUsers = (db.prepare("SELECT COUNT(*) as c FROM users").get() as any).c;
+    const verifiedUsers = (db.prepare("SELECT COUNT(*) as c FROM users WHERE email_verified = 1").get() as any).c;
+    const proUsers = (db.prepare("SELECT COUNT(*) as c FROM users WHERE tier = 'pro'").get() as any).c;
+    const freeUsers = (db.prepare("SELECT COUNT(*) as c FROM users WHERE tier = 'free'").get() as any).c;
+    const signupsLast24h = (db.prepare("SELECT COUNT(*) as c FROM users WHERE created_at >= ?").get(cutoff24h) as any).c;
+    const signupsLast7d = (db.prepare("SELECT COUNT(*) as c FROM users WHERE created_at >= ?").get(cutoff7d) as any).c;
+    const signupsLast30d = (db.prepare("SELECT COUNT(*) as c FROM users WHERE created_at >= ?").get(cutoff30d) as any).c;
+
+    const totalCrawls = (db.prepare("SELECT COUNT(*) as c FROM crawl_jobs").get() as any).c;
+    const crawlsLast24h = (db.prepare("SELECT COUNT(*) as c FROM crawl_jobs WHERE started_at >= ?").get(cutoff24h) as any).c;
+    const crawlsLast7d = (db.prepare("SELECT COUNT(*) as c FROM crawl_jobs WHERE started_at >= ?").get(cutoff7d) as any).c;
+
+    const recentRows = db
+      .prepare("SELECT email, name, tier, email_verified, created_at FROM users ORDER BY created_at DESC LIMIT 20")
+      .all() as any[];
+    const recentSignups = recentRows.map((r) => ({
+      email: r.email,
+      name: r.name,
+      tier: r.tier,
+      emailVerified: !!r.email_verified,
+      createdAt: r.created_at,
+    }));
+
+    return {
+      totalUsers,
+      verifiedUsers,
+      unverifiedUsers: totalUsers - verifiedUsers,
+      freeUsers,
+      proUsers,
+      signupsLast24h,
+      signupsLast7d,
+      signupsLast30d,
+      totalCrawls,
+      crawlsLast24h,
+      crawlsLast7d,
+      recentSignups,
+    };
   }
 }
 
