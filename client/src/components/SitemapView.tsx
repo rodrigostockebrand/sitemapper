@@ -587,8 +587,10 @@ export function SitemapView({ job }: SitemapViewProps) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-57px)]">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/50 gap-3">
+      {/* Toolbar — pinned to viewport top (under the 57px header) so it
+          never scrolls or zooms out of view, even if the page itself
+          scrolls below it (e.g. when the site footer is visible). */}
+      <div className="sticky top-[57px] z-40 flex items-center justify-between px-4 py-2 border-b border-border bg-card/95 backdrop-blur-md gap-3 shadow-sm">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <SitemapStats job={job} />
 
