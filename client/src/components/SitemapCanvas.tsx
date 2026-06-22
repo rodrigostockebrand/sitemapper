@@ -183,6 +183,16 @@ function NodeCardImpl({ node, jobId, selected, onSelect }: NodeCardProps) {
             loading="lazy"
             decoding="async"
           />
+        ) : node.wafBlocked ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-amber-50 dark:bg-amber-950/20">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 text-amber-600 dark:text-amber-400">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="M9 12l2 2 4-4" opacity="0.5" />
+            </svg>
+            <span className="text-[10px] font-semibold tracking-wide text-amber-700 dark:text-amber-300 uppercase">
+              Blocked
+            </span>
+          </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-muted-foreground/40">{fileIcon}</div>

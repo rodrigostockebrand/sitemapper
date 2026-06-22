@@ -815,5 +815,17 @@ export async function crawlSite(
     await pool.close();
   }
 
+  // Hard cap — parallel batches can race past the soft maxPages guard. Trim
+  // any overshoot so the page count never exceeds the user's tier limit.
+  // Also drop any orphan childIds that point to trimmed pages.
+  if (pages.length > maxPages) {
+    const keptIds = new Set(pages.slice(0, maxPages).map((p) => p.id));
+    const trimmed = pages.slice(0, maxPages);
+    for (const p of trimmed) {
+      p.childIds = p.childIds.filter((c) => keptIds.has(c));
+    }
+    return trimmed;
+  }
+
   return pages;
 }

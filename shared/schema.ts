@@ -85,6 +85,10 @@ export interface PageNode {
   wordCount: number;
   internalLinks: number;
   externalLinks: number;
+  // When true, the page returned a WAF / captcha challenge (Imperva,
+  // Cloudflare, Akamai, DataDome, hCaptcha, etc.) and was not screenshottable.
+  wafBlocked?: boolean;
+  wafReason?: string;
 }
 
 // Crawl job

@@ -165,6 +165,69 @@ export async function takeScreenshots(
             }
             await new Promise((r) => setTimeout(r, 1500));
 
+            // ── WAF / captcha detection ──────────────────────────────────
+            // If Imperva/Cloudflare/Akamai/DataDome served a challenge page,
+            // there's nothing useful to screenshot. Bail early, return a clean
+            // "WAF-blocked" marker so the caller can mark the node and move on.
+            // This saves ~10–20 seconds per page (skipping scroll, image waits,
+            // overlay removal, and the screenshot itself) on protected sites.
+            try {
+              const wafSignal = await withTimeout(
+                page.evaluate(() => {
+                  const html = document.documentElement.outerHTML.slice(0, 8000);
+                  const text = (document.body?.innerText || "").slice(0, 2000);
+                  const combined = (html + " " + text).toLowerCase();
+                  const patterns = [
+                    "_incapsula_resource",
+                    "incapsula",
+                    "additional security check is required",
+                    "hcaptcha",
+                    "i am human",
+                    "cf-chl",
+                    "__cf_chl",
+                    "cf-mitigated",
+                    "cloudflare ray id",
+                    "attention required",
+                    "checking your browser",
+                    "ak-challenge",
+                    "_abck",
+                    "datadome",
+                    "dduser",
+                    "perimeterx",
+                    "px-captcha",
+                    "please verify you are a human",
+                    "prove you are a human",
+                    "access denied",
+                    "request blocked",
+                  ];
+                  for (const p of patterns) {
+                    if (combined.includes(p)) return p;
+                  }
+                  // Also flag suspiciously empty bodies (< 200 chars of visible text
+                  // AND no main/article landmarks) — commonly an empty challenge frame.
+                  if (text.trim().length < 200 && !document.querySelector("main, article, header, footer")) {
+                    return "empty-shell";
+                  }
+                  return null;
+                }),
+                3000,
+                "waf-detect"
+              );
+
+              if (wafSignal) {
+                console.log(`[screenshot] WAF/captcha detected (${wafSignal}) on ${pageNode.url} — skipping screenshot`);
+                pageNode.title = pageNode.title || "Blocked by WAF";
+                (pageNode as any).wafBlocked = true;
+                (pageNode as any).wafReason = wafSignal;
+                // Return without taking a screenshot. The node still appears in
+                // the sitemap; the UI can render a "shield" placeholder.
+                if (page) await page.close().catch(() => {});
+                return;
+              }
+            } catch {
+              // Detection failed — proceed with normal capture
+            }
+
             // Layer 1: Try to click common accept/dismiss buttons
             try {
               await withTimeout(

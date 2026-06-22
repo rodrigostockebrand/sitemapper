@@ -108,8 +108,13 @@ export function CrawlProgress({ jobId, onComplete }: CrawlProgressProps) {
     switch (status) {
       case "crawling":
         return `Discovering pages... (${pagesProcessed} found)`;
-      case "screenshotting":
-        return `Capturing screenshots... (${screenshotsProcessed} of ${totalPages})`;
+      case "screenshotting": {
+        // Clamp display so a brief overshoot (parallel batch race) doesn't show
+        // "1186 of 1000 — 111% complete"
+        const safeTotal = Math.max(totalPages, 1);
+        const safeDone = Math.min(screenshotsProcessed, safeTotal);
+        return `Capturing screenshots... (${safeDone} of ${safeTotal})`;
+      }
       case "complete":
         return `Complete — ${totalPages} pages mapped`;
       case "error":
@@ -131,7 +136,7 @@ export function CrawlProgress({ jobId, onComplete }: CrawlProgressProps) {
           </p>
           <Progress value={progress} className="h-2" data-testid="progress-bar" />
           <p className="text-xs text-muted-foreground">
-            {progress}% complete
+            {Math.min(progress, 100)}% complete
           </p>
         </div>
       </div>
