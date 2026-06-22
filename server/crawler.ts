@@ -573,7 +573,12 @@ export async function crawlSite(
   if (basePath.length > 1 && basePath.endsWith("/")) {
     basePath = basePath.slice(0, -1);
   }
-  const pathPrefix = basePath !== "/" ? basePath : null;
+  // If the seed is a sitemap (xml), DO NOT scope the crawl to the seed's
+  // directory — the sitemap is just a manifest and discovered URLs live
+  // anywhere on the host. Otherwise restrict to the seed subdirectory so
+  // a user crawling /blog only gets /blog/* pages.
+  const seedIsSitemap = /\.(xml|xml\.gz)(\?|$)/i.test(startUrl) || /sitemap/i.test(basePath);
+  const pathPrefix = !seedIsSitemap && basePath !== "/" ? basePath : null;
   const visited = new Map<string, string>(); // url -> id
   const pages: PageNode[] = [];
   const queue: { url: string; depth: number; parentId: string | null }[] = [];
@@ -588,6 +593,47 @@ export async function crawlSite(
   const startId = randomUUID();
   visited.set(normalizedStart, startId);
   queue.push({ url: normalizedStart, depth: 0, parentId: null });
+
+  // ── Auto-seed sitemaps when crawling from a root/homepage ───────────────
+  // On WAF-protected enterprise sites, the homepage often serves a JS challenge
+  // that blocks link discovery. By seeding /sitemap.xml and /robots.txt's listed
+  // sitemaps as depth-0 entries, the crawler gets a clean manifest of URLs in
+  // parallel with the homepage crawl. Best-effort — failures are silent.
+  if (!seedIsSitemap && basePath === "/") {
+    try {
+      const sitemapCandidates = new Set<string>([
+        `${baseUrl.origin}/sitemap.xml`,
+        `${baseUrl.origin}/sitemap_index.xml`,
+        `${baseUrl.origin}/sitemap-index.xml`,
+      ]);
+
+      // Try to discover additional sitemaps from robots.txt
+      try {
+        const robotsRes = await fetch(`${baseUrl.origin}/robots.txt`, {
+          headers: { "User-Agent": USER_AGENT },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (robotsRes.ok) {
+          const robotsTxt = await robotsRes.text();
+          for (const m of robotsTxt.matchAll(/^\s*Sitemap:\s*(\S+)/gim)) {
+            sitemapCandidates.add(m[1].trim());
+          }
+        }
+      } catch {
+        // robots.txt fetch failed — fall back to the standard locations above
+      }
+
+      for (const sitemapUrl of sitemapCandidates) {
+        const normalized = normalizeUrl(sitemapUrl, sitemapUrl);
+        if (!normalized || visited.has(normalized)) continue;
+        const sitemapId = randomUUID();
+        visited.set(normalized, sitemapId);
+        queue.push({ url: normalized, depth: 0, parentId: null });
+      }
+    } catch {
+      // Sitemap seeding is best-effort — swallow errors
+    }
+  }
 
   let processed = 0;
 
@@ -735,9 +781,11 @@ export async function crawlSite(
               }
 
               const lowered = link.toLowerCase();
+              // Skip static assets. We do NOT exclude .xml here because nested
+              // sitemaps (sitemapindex → sub-sitemap.xml) need to be followed.
               if (
                 lowered.match(
-                  /\.(css|js|json|xml|ico|woff|woff2|ttf|eot|zip|gz|tar|mp3|mp4|avi|mov)(\?|$)/
+                  /\.(css|js|json|ico|woff|woff2|ttf|eot|zip|gz|tar|mp3|mp4|avi|mov)(\?|$)/
                 )
               )
                 continue;
