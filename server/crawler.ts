@@ -160,7 +160,12 @@ async function fetchPageOnce(url: string): Promise<{
     });
     const contentType = getContentType(res.headers);
     let body = "";
-    if (contentType.includes("html") || contentType.includes("xhtml")) {
+    // Read text bodies for HTML *and* XML sitemaps. We sniff content-type and
+    // ALSO fall back to URL-path detection because some CDNs return
+    // `application/octet-stream` for sitemap.xml.
+    const looksLikeXml =
+      contentType.includes("xml") || /\.(xml|xml\.gz)(\?|$)/i.test(url) || /sitemap/i.test(url);
+    if (contentType.includes("html") || contentType.includes("xhtml") || looksLikeXml) {
       body = await res.text();
     }
 
@@ -179,12 +184,20 @@ async function fetchPageOnce(url: string): Promise<{
 
     const result = { body, statusCode: res.status, contentType, ok: res.ok, retryAfterMs };
 
-    // Detect bot challenge pages
+    // Detect bot challenge pages. WAFs commonly return 200 with a tiny
+    // HTML page that bootstraps a JS challenge. Patterns covered:
+    //   - Imperva / Incapsula (_Incapsula_Resource iframe)
+    //   - Cloudflare (cf-chl, cf_chl_, __cf_chl_)
+    //   - Akamai (ak-challenge, _abck)
+    //   - DataDome (dduser, ddc)
+    //   - Generic captcha/verify/access-denied verbiage
     const isChallenged =
       result.ok &&
       result.body.length > 0 &&
-      result.body.length < 5000 &&
-      /challenge|captcha|verify|blocked|dduser|access denied|please wait/i.test(result.body);
+      result.body.length < 8000 &&
+      /challenge|captcha|verify|blocked|access denied|please wait|incapsula|_incapsula_resource|cf-chl|cf_chl|__cf_chl|cf-ray|ak-challenge|_abck|dduser|datadome/i.test(
+        result.body
+      );
 
     if (!result.ok || isChallenged) {
       return { ...result, ok: false };
@@ -275,20 +288,39 @@ async function fetchPageWithBrowser(
     });
 
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 12000 });
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
     } catch {
       // Timeout OK — DOM likely loaded
     }
 
-    await new Promise((r) => setTimeout(r, 800));
+    // Initial settle
+    await new Promise((r) => setTimeout(r, 1200));
+
+    // WAF challenge sweep — Imperva / Cloudflare / Akamai serve a tiny
+    // bootstrap page that JS-resolves into the real content. If the body
+    // still looks like a challenge after the first wait, keep waiting up
+    // to 6 seconds for it to clear before giving up.
+    const challengeRe =
+      /_incapsula_resource|incapsula|cf-chl|cf_chl|__cf_chl|ak-challenge|_abck|dduser|datadome|challenge-platform|cf-mitigated/i;
+    for (let i = 0; i < 6; i++) {
+      let snippet = "";
+      try {
+        snippet = (await page.content()).slice(0, 4000);
+      } catch {
+        break;
+      }
+      if (!challengeRe.test(snippet) && snippet.length > 1500) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
 
     const body = await page.content();
+    const stillChallenged = challengeRe.test(body.slice(0, 4000)) && body.length < 5000;
     const ok = responseStatus >= 200 && responseStatus < 400;
     return {
       body,
       statusCode: responseStatus,
       contentType: "text/html",
-      ok: body.length > 500 ? true : ok,
+      ok: !stillChallenged && body.length > 500 ? true : ok,
     };
   } catch (err: any) {
     console.error("[crawler] browser fetch failed:", err.message);
@@ -300,8 +332,16 @@ async function fetchPageWithBrowser(
 
 // ── Link extraction ─────────────────────────────────────────────
 
-function extractPageInfo(
-  html: string,
+/**
+ * Parse XML sitemap (<urlset>) or sitemap index (<sitemapindex>) and return
+ * the <loc> URLs as "internal links" so the crawler queues them. Uses cheerio
+ * in xmlMode rather than a heavier XML lib — sitemaps are simple enough.
+ *
+ * Cross-host <loc> entries are still treated as internal because publishers
+ * commonly split sitemaps across subdomains (e.g. www -> static.).
+ */
+function extractSitemapXml(
+  xml: string,
   url: string
 ): {
   title: string;
@@ -310,6 +350,74 @@ function extractPageInfo(
   wordCount: number;
   links: { internal: string[]; externalCount: number };
 } {
+  const $ = cheerio.load(xml, { xmlMode: true });
+  const baseHost = (() => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  })();
+
+  const internalLinks: string[] = [];
+  let externalCount = 0;
+
+  $("loc").each((_, el) => {
+    const raw = $(el).text().trim();
+    if (!raw) return;
+    const normalized = normalizeUrl(raw, url);
+    if (!normalized) return;
+    try {
+      const h = new URL(normalized).hostname.replace(/^www\./, "");
+      // Same registrable host OR same parent domain (e.g. about.foo.com vs www.foo.com)
+      if (h === baseHost || h.endsWith("." + baseHost) || baseHost.endsWith("." + h)) {
+        internalLinks.push(normalized);
+      } else {
+        externalCount++;
+      }
+    } catch {
+      // Skip malformed
+    }
+  });
+
+  const isIndex = /sitemapindex/i.test(xml.slice(0, 2000));
+  const title = isIndex ? `Sitemap index (${internalLinks.length} sitemaps)` : `Sitemap (${internalLinks.length} URLs)`;
+
+  return {
+    title,
+    metaDescription: null,
+    h1: null,
+    wordCount: 0,
+    links: { internal: [...new Set(internalLinks)], externalCount },
+  };
+}
+
+function extractPageInfo(
+  html: string,
+  url: string,
+  contentType: string = ""
+): {
+  title: string;
+  metaDescription: string | null;
+  h1: string | null;
+  wordCount: number;
+  links: { internal: string[]; externalCount: number };
+} {
+  // ── XML sitemap detection ─────────────────────────────────────────────
+  // Treat the body as an XML sitemap when any of these are true:
+  //   - Content-Type advertises xml
+  //   - URL ends in .xml / contains "sitemap"
+  //   - Body starts with <?xml or contains <urlset / <sitemapindex
+  const isXmlSitemap =
+    /xml/i.test(contentType) ||
+    /\.(xml|xml\.gz)(\?|$)/i.test(url) ||
+    /^[\s\uFEFF]*<\?xml/i.test(html) ||
+    /<(urlset|sitemapindex)\b/i.test(html.slice(0, 2000));
+
+  if (isXmlSitemap && html) {
+    return extractSitemapXml(html, url);
+  }
+
   const $ = cheerio.load(html);
   const title = $("title").first().text().trim() || url;
   const metaDescription = $('meta[name="description"]').attr("content")?.trim() || null;
@@ -533,8 +641,16 @@ export async function crawlSite(
           let externalLinks = 0;
           let discoveredUrls: string[] = [];
 
-          if (ok && fileType === "html" && body) {
-            const info = extractPageInfo(body, item.url);
+          // Also run link extraction for XML sitemaps so <loc> URLs get queued.
+          const isSitemapXml =
+            !!body &&
+            (/xml/i.test(contentType) ||
+              /\.(xml|xml\.gz)(\?|$)/i.test(item.url) ||
+              /^[\s\uFEFF]*<\?xml/i.test(body) ||
+              /<(urlset|sitemapindex)\b/i.test(body.slice(0, 2000)));
+
+          if (ok && body && (fileType === "html" || isSitemapXml)) {
+            const info = extractPageInfo(body, item.url, contentType);
             title = info.title;
             metaDescription = info.metaDescription;
             h1 = info.h1;
