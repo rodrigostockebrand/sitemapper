@@ -594,46 +594,11 @@ export async function crawlSite(
   visited.set(normalizedStart, startId);
   queue.push({ url: normalizedStart, depth: 0, parentId: null });
 
-  // ── Auto-seed sitemaps when crawling from a root/homepage ───────────────
-  // On WAF-protected enterprise sites, the homepage often serves a JS challenge
-  // that blocks link discovery. By seeding /sitemap.xml and /robots.txt's listed
-  // sitemaps as depth-0 entries, the crawler gets a clean manifest of URLs in
-  // parallel with the homepage crawl. Best-effort — failures are silent.
-  if (!seedIsSitemap && basePath === "/") {
-    try {
-      const sitemapCandidates = new Set<string>([
-        `${baseUrl.origin}/sitemap.xml`,
-        `${baseUrl.origin}/sitemap_index.xml`,
-        `${baseUrl.origin}/sitemap-index.xml`,
-      ]);
-
-      // Try to discover additional sitemaps from robots.txt
-      try {
-        const robotsRes = await fetch(`${baseUrl.origin}/robots.txt`, {
-          headers: { "User-Agent": USER_AGENT },
-          signal: AbortSignal.timeout(5000),
-        });
-        if (robotsRes.ok) {
-          const robotsTxt = await robotsRes.text();
-          for (const m of robotsTxt.matchAll(/^\s*Sitemap:\s*(\S+)/gim)) {
-            sitemapCandidates.add(m[1].trim());
-          }
-        }
-      } catch {
-        // robots.txt fetch failed — fall back to the standard locations above
-      }
-
-      for (const sitemapUrl of sitemapCandidates) {
-        const normalized = normalizeUrl(sitemapUrl, sitemapUrl);
-        if (!normalized || visited.has(normalized)) continue;
-        const sitemapId = randomUUID();
-        visited.set(normalized, sitemapId);
-        queue.push({ url: normalized, depth: 0, parentId: null });
-      }
-    } catch {
-      // Sitemap seeding is best-effort — swallow errors
-    }
-  }
+  // Note: prior version auto-seeded /sitemap.xml + robots-declared sitemaps as
+  // additional depth-0 entries. That produced a confusing dual-tree layout
+  // (one tree from the homepage, another from the sitemap manifest) so it's
+  // been removed. XML sitemap parsing still works when a user *explicitly*
+  // enters a sitemap URL as the seed.
 
   let processed = 0;
 
