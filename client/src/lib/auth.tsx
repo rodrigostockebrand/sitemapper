@@ -7,7 +7,7 @@ export interface AuthUser {
   email: string;
   name: string;
   emailVerified: boolean;
-  tier: "free" | "pro";
+  tier: "free" | "pro" | "owner";
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   createdAt: string;

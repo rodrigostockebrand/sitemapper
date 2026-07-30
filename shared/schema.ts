@@ -23,7 +23,7 @@ export type RegisterRequest = z.infer<typeof registerSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;
 
 // User
-export type SubscriptionTier = "free" | "pro";
+export type SubscriptionTier = "free" | "pro" | "owner";
 
 export interface User {
   id: string;
@@ -53,14 +53,24 @@ export interface VerificationToken {
 export const TIER_LIMITS = {
   free: { maxPages: 100, maxDepth: 5, monthlyCredits: 5 },
   pro: { maxPages: 1000, maxDepth: 10, monthlyCredits: Infinity },
+  owner: { maxPages: 10000, maxDepth: 20, monthlyCredits: Infinity },
 } as const;
 
 // ── Crawl job schemas ─────────────────────────────────────
-export const crawlRequestSchema = z.object({
-  url: z.string().url(),
-  maxPages: z.number().min(1).max(1000).default(50),
-  maxDepth: z.number().min(1).max(10).default(5),
-});
+// Either `url` (single-seed crawl) or `seedUrls` (multi-seed upload) must
+// be provided. `seedUrls` is owner-only and skips link discovery — it only
+// screenshots the exact URLs supplied.
+export const crawlRequestSchema = z
+  .object({
+    url: z.string().url().optional(),
+    seedUrls: z.array(z.string().url()).min(1).max(10000).optional(),
+    maxPages: z.number().min(1).max(10000).default(50),
+    maxDepth: z.number().min(1).max(20).default(5),
+  })
+  .refine((data) => !!data.url || (data.seedUrls && data.seedUrls.length > 0), {
+    message: "Provide either a url or a non-empty seedUrls list",
+    path: ["url"],
+  });
 
 export type CrawlRequest = z.infer<typeof crawlRequestSchema>;
 

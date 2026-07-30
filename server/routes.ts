@@ -15,7 +15,7 @@ import {
 import { crawlSite } from "./crawler";
 import { takeScreenshots } from "./screenshotter";
 import { WebSocketServer } from "ws";
-import { signToken, optionalAuth, requireAuth, getRequestUser } from "./auth";
+import { signToken, optionalAuth, requireAuth, getRequestUser, applyOwnerTier } from "./auth";
 import { sendVerificationEmail } from "./email";
 
 // ── Stripe setup ───────────────────────────────────────────
@@ -128,7 +128,7 @@ export async function registerRoutes(
       }
 
       const jwt = signToken(userId);
-      res.status(201).json({ user: safeUser(user), token: jwt });
+      res.status(201).json({ user: safeUser(applyOwnerTier(user)), token: jwt });
     } catch (err: any) {
       console.error("Register error:", err);
       res.status(500).json({ error: "Registration failed" });
@@ -170,7 +170,7 @@ export async function registerRoutes(
         createdAt: new Date().toISOString(),
       });
       const jwt = signToken(userId);
-      res.status(201).json({ user: safeUser(user), token: jwt });
+      res.status(201).json({ user: safeUser(applyOwnerTier(user)), token: jwt });
     } catch (err: any) {
       console.error("Beta register error:", err);
       res.status(500).json({ error: "Beta registration failed" });
@@ -197,7 +197,7 @@ export async function registerRoutes(
       }
 
       const jwt = signToken(user.id);
-      res.json({ user: safeUser(user), token: jwt });
+      res.json({ user: safeUser(applyOwnerTier(user)), token: jwt });
     } catch (err: any) {
       console.error("Login error:", err);
       res.status(500).json({ error: "Login failed" });
@@ -232,7 +232,7 @@ export async function registerRoutes(
 
       const user = storage.getUserById(vToken.userId);
       const jwt = signToken(vToken.userId);
-      res.json({ user: user ? safeUser(user) : null, token: jwt, message: "Email verified successfully" });
+      res.json({ user: user ? safeUser(applyOwnerTier(user)) : null, token: jwt, message: "Email verified successfully" });
     } catch (err: any) {
       console.error("Verify email error:", err);
       res.status(500).json({ error: "Verification failed" });
@@ -277,7 +277,10 @@ export async function registerRoutes(
       user: safeUser(user),
       limits,
       crawlsThisMonth,
-      crawlsRemaining: user.tier === "pro" ? Infinity : Math.max(0, limits.monthlyCredits - crawlsThisMonth),
+      crawlsRemaining:
+        user.tier === "pro" || user.tier === "owner"
+          ? Infinity
+          : Math.max(0, limits.monthlyCredits - crawlsThisMonth),
     });
   });
 
@@ -295,7 +298,16 @@ export async function registerRoutes(
       const tier = user?.tier || "free";
       const limits = TIER_LIMITS[tier];
 
-      let { url, maxPages, maxDepth } = parsed.data;
+      let { url, seedUrls, maxPages, maxDepth } = parsed.data;
+
+      // URL-list uploads are owner-only — the feature bypasses link discovery
+      // and is meant for large curated crawls that free/pro tiers don't support.
+      if (seedUrls && seedUrls.length > 0 && tier !== "owner") {
+        return res.status(403).json({
+          error: "URL list uploads are available in Owner mode only.",
+          code: "OWNER_ONLY",
+        });
+      }
 
       // Enforce tier limits
       if (maxPages > limits.maxPages) {
@@ -316,10 +328,16 @@ export async function registerRoutes(
         }
       }
 
-      // Normalize domain
-      let normalizedUrl = url;
-      if (!normalizedUrl.startsWith("http")) {
-        normalizedUrl = "https://" + normalizedUrl;
+      // Normalize domain — either from the single-URL seed or the first entry
+      // in the uploaded seedUrls list.
+      let normalizedUrl: string;
+      if (seedUrls && seedUrls.length > 0) {
+        normalizedUrl = seedUrls[0];
+      } else {
+        normalizedUrl = url!;
+        if (!normalizedUrl.startsWith("http")) {
+          normalizedUrl = "https://" + normalizedUrl;
+        }
       }
 
       const domain = new URL(normalizedUrl).hostname;
@@ -347,10 +365,16 @@ export async function registerRoutes(
       (async () => {
         try {
           // Phase 1: Crawl
-          const pages = await crawlSite(normalizedUrl, maxPages, maxDepth, (update) => {
-            storage.updateCrawlJob(jobId, update);
-            broadcastProgress(jobId, { ...update, status: "crawling" });
-          });
+          const pages = await crawlSite(
+            normalizedUrl,
+            maxPages,
+            maxDepth,
+            (update) => {
+              storage.updateCrawlJob(jobId, update);
+              broadcastProgress(jobId, { ...update, status: "crawling" });
+            },
+            seedUrls && seedUrls.length > 0 ? { seedUrls } : {}
+          );
 
           storage.updateCrawlJob(jobId, {
             status: "screenshotting",
@@ -511,8 +535,8 @@ export async function registerRoutes(
 
       const user = getRequestUser(req)!;
 
-      if (user.tier === "pro") {
-        return res.status(400).json({ error: "You are already on the Pro plan" });
+      if (user.tier === "pro" || user.tier === "owner") {
+        return res.status(400).json({ error: "You already have Pro-level access" });
       }
 
       // Reuse existing Stripe customer or create a new one

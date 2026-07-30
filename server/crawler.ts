@@ -561,13 +561,27 @@ class Semaphore {
 
 // ── Main crawl function ─────────────────────────────────────────
 
+export interface CrawlOptions {
+  /** Multi-seed mode — crawl each provided URL as a depth-0 entry.
+   *  When set, link discovery is disabled so we only screenshot the
+   *  exact URLs the user supplied. */
+  seedUrls?: string[];
+}
+
 export async function crawlSite(
   startUrl: string,
   maxPages: number,
   maxDepth: number,
-  onProgress: (job: Partial<CrawlJob>) => void
+  onProgress: (job: Partial<CrawlJob>) => void,
+  options: CrawlOptions = {}
 ): Promise<PageNode[]> {
-  const baseUrl = new URL(startUrl);
+  // Multi-seed mode: user provided an explicit URL list. Skip link discovery
+  // and only visit the URLs they uploaded. Use the first URL to derive the
+  // base host for filtering. All URLs share a synthetic depth-0 forest root.
+  const multiSeedMode = !!(options.seedUrls && options.seedUrls.length > 0);
+  const effectiveStartUrl = multiSeedMode ? options.seedUrls![0] : startUrl;
+
+  const baseUrl = new URL(effectiveStartUrl);
   const baseHost = baseUrl.hostname;
   let basePath = baseUrl.pathname;
   if (basePath.length > 1 && basePath.endsWith("/")) {
@@ -577,8 +591,10 @@ export async function crawlSite(
   // directory — the sitemap is just a manifest and discovered URLs live
   // anywhere on the host. Otherwise restrict to the seed subdirectory so
   // a user crawling /blog only gets /blog/* pages.
-  const seedIsSitemap = /\.(xml|xml\.gz)(\?|$)/i.test(startUrl) || /sitemap/i.test(basePath);
-  const pathPrefix = !seedIsSitemap && basePath !== "/" ? basePath : null;
+  // Multi-seed mode disables path scoping entirely — URLs come from the user's
+  // uploaded list and may span multiple subdirectories or subdomains.
+  const seedIsSitemap = /\.(xml|xml\.gz)(\?|$)/i.test(effectiveStartUrl) || /sitemap/i.test(basePath);
+  const pathPrefix = !multiSeedMode && !seedIsSitemap && basePath !== "/" ? basePath : null;
   const visited = new Map<string, string>(); // url -> id
   const pages: PageNode[] = [];
   const queue: { url: string; depth: number; parentId: string | null }[] = [];
@@ -589,10 +605,24 @@ export async function crawlSite(
   // Track whether this site needs browser rendering (detected on first page)
   let siteNeedsBrowser = false;
 
-  const normalizedStart = normalizeUrl(startUrl, startUrl)!;
-  const startId = randomUUID();
-  visited.set(normalizedStart, startId);
-  queue.push({ url: normalizedStart, depth: 0, parentId: null });
+  if (multiSeedMode) {
+    // Seed the queue with every uploaded URL as an independent depth-0 entry.
+    // De-dupe by normalized URL. maxDepth is effectively 0 because link
+    // discovery is disabled below.
+    for (const rawSeed of options.seedUrls!) {
+      const normalized = normalizeUrl(rawSeed, rawSeed);
+      if (!normalized || visited.has(normalized)) continue;
+      const id = randomUUID();
+      visited.set(normalized, id);
+      queue.push({ url: normalized, depth: 0, parentId: null });
+      if (queue.length >= maxPages) break;
+    }
+  } else {
+    const normalizedStart = normalizeUrl(startUrl, startUrl)!;
+    const startId = randomUUID();
+    visited.set(normalizedStart, startId);
+    queue.push({ url: normalizedStart, depth: 0, parentId: null });
+  }
 
   // Note: prior version auto-seeded /sitemap.xml + robots-declared sitemaps as
   // additional depth-0 entries. That produced a confusing dual-tree layout
@@ -731,7 +761,9 @@ export async function crawlSite(
             }
           }
 
-          if (item.depth < maxDepth) {
+          // Skip link discovery entirely in multi-seed mode — the user's
+          // uploaded URL list is the complete set of pages to crawl.
+          if (!multiSeedMode && item.depth < maxDepth) {
             for (const link of discoveredUrls) {
               if (visited.has(link)) continue;
               if (pages.length + queue.length >= maxPages) break;
